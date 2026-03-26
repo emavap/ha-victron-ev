@@ -502,6 +502,78 @@ def test_device_id_kwargs_falls_back_to_slave():
     assert hub._device_id_kwargs(fake_method) == {"slave": 7}
 
 
+def test_read_retries_with_device_id_when_slave_keyword_is_rejected(monkeypatch):
+    """A slave/device_id keyword mismatch should retry with the alternate keyword."""
+    hub = VictronEvseModbusHub(
+        host="192.168.5.48",
+        port=502,
+        slave=7,
+        timeout=5,
+        register_profile=PROFILE_AUTO,
+    )
+
+    class Response:
+        registers = [0xC026]
+
+        @staticmethod
+        def isError():
+            return False
+
+    class DummyClient:
+        def connect(self):
+            return True
+
+        def close(self):
+            return None
+
+        @staticmethod
+        def read_holding_registers(address: int, count: int, *, device_id: int):
+            assert address == 5000
+            assert count == 1
+            assert device_id == 7
+            return Response()
+
+    monkeypatch.setattr(hub, "_device_id_kwargs", lambda method: {"slave": 7})
+    hub._client = DummyClient()
+
+    assert hub._read_holding_registers(5000, 1) == [0xC026]
+
+
+def test_write_retries_with_slave_when_device_id_keyword_is_rejected(monkeypatch):
+    """The write path should also retry when pymodbus expects the other keyword."""
+    hub = VictronEvseModbusHub(
+        host="192.168.5.48",
+        port=502,
+        slave=7,
+        timeout=5,
+        register_profile=PROFILE_AUTO,
+    )
+
+    class Response:
+        @staticmethod
+        def isError():
+            return False
+
+    class DummyClient:
+        def connect(self):
+            return True
+
+        def close(self):
+            return None
+
+        @staticmethod
+        def write_register(address: int, value: int, *, slave: int):
+            assert address == 5050
+            assert value == 1
+            assert slave == 7
+            return Response()
+
+    monkeypatch.setattr(hub, "_device_id_kwargs", lambda method: {"device_id": 7})
+    hub._client = DummyClient()
+
+    hub.write_register(5050, 1)
+
+
 def test_detect_profile_auto_falls_back_to_evse(monkeypatch):
     """Auto-detect should fall back to the legacy profile on unknown product IDs."""
     hub = VictronEvseModbusHub(

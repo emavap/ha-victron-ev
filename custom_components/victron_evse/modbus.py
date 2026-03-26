@@ -277,10 +277,11 @@ class VictronEvseModbusHub:
         with self._lock:
             client = self._ensure_client()
             try:
-                response = client.write_register(
+                response = self._call_with_device_id_fallback(
+                    client.write_register,
+                    operation=f"write register {address}",
                     address=address,
                     value=value,
-                    **self._device_id_kwargs(client.write_register),
                 )
             except Exception as err:
                 self._handle_transport_error(err, f"write register {address}")
@@ -295,10 +296,11 @@ class VictronEvseModbusHub:
         with self._lock:
             client = self._ensure_client()
             try:
-                response = client.read_holding_registers(
+                response = self._call_with_device_id_fallback(
+                    client.read_holding_registers,
+                    operation=f"read holding registers {address}:{count}",
                     address=address,
                     count=count,
-                    **self._device_id_kwargs(client.read_holding_registers),
                 )
             except Exception as err:
                 self._handle_transport_error(
@@ -422,6 +424,50 @@ class VictronEvseModbusHub:
         if "device_id" in parameters:
             return {"device_id": self._slave}
         return {"slave": self._slave}
+
+    def _call_with_device_id_fallback(self, method, operation: str, **kwargs):
+        """Call a pymodbus method, retrying with the alternate unit keyword when needed."""
+        unit_kwargs = self._device_id_kwargs(method)
+        try:
+            return method(**kwargs, **unit_kwargs)
+        except TypeError as err:
+            fallback_kwargs = self._alternate_device_id_kwargs(unit_kwargs)
+            if (
+                fallback_kwargs is None
+                or not self._is_unexpected_unit_keyword_error(err, unit_kwargs)
+            ):
+                raise
+            _LOGGER.debug(
+                "Retrying %s for %s:%s unit %s with %s after keyword mismatch: %s",
+                operation,
+                self._host,
+                self._port,
+                self._slave,
+                next(iter(fallback_kwargs)),
+                err,
+            )
+            return method(**kwargs, **fallback_kwargs)
+
+    def _alternate_device_id_kwargs(
+        self, unit_kwargs: dict[str, int]
+    ) -> dict[str, int] | None:
+        """Return the alternate unit keyword mapping."""
+        if "slave" in unit_kwargs:
+            return {"device_id": unit_kwargs["slave"]}
+        if "device_id" in unit_kwargs:
+            return {"slave": unit_kwargs["device_id"]}
+        return None
+
+    def _is_unexpected_unit_keyword_error(
+        self, err: TypeError, unit_kwargs: dict[str, int]
+    ) -> bool:
+        """Return true when pymodbus rejected the unit keyword name."""
+        message = str(err)
+        keyword = next(iter(unit_kwargs), None)
+        return keyword is not None and (
+            f"unexpected keyword argument '{keyword}'" in message
+            or f"got an unexpected keyword argument '{keyword}'" in message
+        )
 
     def _handle_transport_error(self, err: Exception, operation: str) -> None:
         """Reset the client and raise a normalized exception."""
