@@ -71,12 +71,23 @@ def _normalize_host(host: str) -> str:
     return str(host).strip().lower()
 
 
+def _normalized_modbus_input(data: dict[str, Any]) -> dict[str, Any]:
+    """Normalize user-entered Modbus settings from selectors/forms."""
+    normalized = dict(data)
+    if CONF_PORT in normalized:
+        normalized[CONF_PORT] = int(normalized[CONF_PORT])
+    if CONF_SLAVE in normalized:
+        normalized[CONF_SLAVE] = int(normalized[CONF_SLAVE])
+    return normalized
+
+
 def _network_target_matches(entry: ConfigEntry, data: dict[str, Any]) -> bool:
     """Return true when an entry points at the same network target."""
+    normalized = _normalized_modbus_input(data)
     return (
-        _normalize_host(entry.data.get(CONF_HOST, "")) == _normalize_host(data[CONF_HOST])
-        and entry.data.get(CONF_PORT) == data[CONF_PORT]
-        and entry.data.get(CONF_SLAVE) == data[CONF_SLAVE]
+        _normalize_host(entry.data.get(CONF_HOST, "")) == _normalize_host(normalized[CONF_HOST])
+        and entry.data.get(CONF_PORT) == normalized[CONF_PORT]
+        and entry.data.get(CONF_SLAVE) == normalized[CONF_SLAVE]
     )
 
 
@@ -104,16 +115,17 @@ async def validate_input(
     existing_entry: ConfigEntry | None = None,
 ) -> dict[str, str | None]:
     """Validate user input by opening a Modbus session."""
+    normalized = _normalized_modbus_input(data)
     hub = VictronEvseModbusHub(
-        host=data[CONF_HOST],
-        port=data[CONF_PORT],
-        slave=data[CONF_SLAVE],
+        host=normalized[CONF_HOST],
+        port=normalized[CONF_PORT],
+        slave=normalized[CONF_SLAVE],
         timeout=(
             existing_entry.options.get(CONF_TIMEOUT, DEFAULT_TIMEOUT)
             if existing_entry is not None
             else DEFAULT_TIMEOUT
         ),
-        register_profile=data.get(CONF_REGISTER_PROFILE, DEFAULT_REGISTER_PROFILE),
+        register_profile=normalized.get(CONF_REGISTER_PROFILE, DEFAULT_REGISTER_PROFILE),
     )
     try:
         profile, device_info = await hass.async_add_executor_job(hub.detect_profile)
@@ -125,7 +137,7 @@ async def validate_input(
     serial = device_info.get(CONF_DEVICE_SERIAL)
     unique_id, device_uid = _stable_unique_id(serial, existing_entry)
     return {
-        "title": data.get(CONF_NAME) or f"{DEFAULT_NAME} ({data[CONF_HOST]})",
+        "title": normalized.get(CONF_NAME) or f"{DEFAULT_NAME} ({normalized[CONF_HOST]})",
         "unique_id": unique_id,
         CONF_REGISTER_PROFILE: profile.key,
         CONF_CHARGER_MODEL: device_info.get(CONF_CHARGER_MODEL),
@@ -159,8 +171,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             try:
-                self._async_abort_if_network_target_configured(user_input)
-                info = await validate_input(self.hass, user_input)
+                normalized_input = _normalized_modbus_input(user_input)
+                self._async_abort_if_network_target_configured(normalized_input)
+                info = await validate_input(self.hass, normalized_input)
             except AbortFlow:
                 raise
             except CannotConnect:
@@ -175,11 +188,11 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 return self.async_create_entry(
                     title=info["title"],
                     data={
-                        CONF_NAME: user_input.get(CONF_NAME) or DEFAULT_NAME,
-                        CONF_HOST: user_input[CONF_HOST],
-                        CONF_PORT: user_input[CONF_PORT],
+                        CONF_NAME: normalized_input.get(CONF_NAME) or DEFAULT_NAME,
+                        CONF_HOST: normalized_input[CONF_HOST],
+                        CONF_PORT: normalized_input[CONF_PORT],
                         CONF_REGISTER_PROFILE: info[CONF_REGISTER_PROFILE],
-                        CONF_SLAVE: user_input[CONF_SLAVE],
+                        CONF_SLAVE: normalized_input[CONF_SLAVE],
                         CONF_CHARGER_MODEL: info.get(CONF_CHARGER_MODEL),
                         CONF_DEVICE_SERIAL: info.get(CONF_DEVICE_SERIAL),
                         CONF_DEVICE_UID: info.get(CONF_DEVICE_UID),
@@ -225,11 +238,14 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             try:
+                normalized_input = _normalized_modbus_input(user_input)
                 self._async_abort_if_network_target_configured(
-                    user_input,
+                    normalized_input,
                     exclude_entry_id=entry.entry_id,
                 )
-                info = await validate_input(self.hass, user_input, existing_entry=entry)
+                info = await validate_input(
+                    self.hass, normalized_input, existing_entry=entry
+                )
             except AbortFlow:
                 raise
             except CannotConnect:
@@ -247,11 +263,11 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     title=info["title"],
                     data={
                         **entry.data,
-                        CONF_NAME: user_input.get(CONF_NAME) or DEFAULT_NAME,
-                        CONF_HOST: user_input[CONF_HOST],
-                        CONF_PORT: user_input[CONF_PORT],
+                        CONF_NAME: normalized_input.get(CONF_NAME) or DEFAULT_NAME,
+                        CONF_HOST: normalized_input[CONF_HOST],
+                        CONF_PORT: normalized_input[CONF_PORT],
                         CONF_REGISTER_PROFILE: info[CONF_REGISTER_PROFILE],
-                        CONF_SLAVE: user_input[CONF_SLAVE],
+                        CONF_SLAVE: normalized_input[CONF_SLAVE],
                         CONF_CHARGER_MODEL: info.get(CONF_CHARGER_MODEL),
                         CONF_DEVICE_SERIAL: info.get(CONF_DEVICE_SERIAL),
                         CONF_DEVICE_UID: info.get(CONF_DEVICE_UID),

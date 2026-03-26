@@ -292,6 +292,42 @@ async def test_validate_input_uses_existing_timeout_during_reconfigure(hass):
 
 
 @pytest.mark.asyncio
+async def test_validate_input_normalizes_selector_number_values(hass):
+    """Validation should coerce selector number-box values to ints."""
+    hub = Mock()
+    hub.detect_profile.return_value = (
+        EVCS_PROFILE,
+        {
+            CONF_CHARGER_MODEL: "EVCS 32A NS V2",
+            CONF_DEVICE_SERIAL: "HQ123456",
+        },
+    )
+
+    with patch(
+        "custom_components.victron_evse.config_flow.VictronEvseModbusHub",
+        return_value=hub,
+    ) as hub_class:
+        await validate_input(
+            hass,
+            {
+                CONF_NAME: "Garage Charger",
+                CONF_HOST: "192.168.5.48",
+                CONF_PORT: 502,
+                CONF_REGISTER_PROFILE: PROFILE_EVCS,
+                CONF_SLAVE: 1.0,
+            },
+        )
+
+    hub_class.assert_called_once_with(
+        host="192.168.5.48",
+        port=502,
+        slave=1,
+        timeout=DEFAULT_TIMEOUT,
+        register_profile=PROFILE_EVCS,
+    )
+
+
+@pytest.mark.asyncio
 async def test_reconfigure_flow_updates_host_and_port(hass):
     """Reconfigure should allow changing network settings from the UI."""
     with patch(
