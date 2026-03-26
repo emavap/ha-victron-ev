@@ -1,6 +1,7 @@
 """Tests for Victron EVSE register parsing."""
 
 import pytest
+from pymodbus.exceptions import ModbusException
 
 from custom_components.victron_evse.const import (
     CONF_CHARGER_MODEL,
@@ -121,6 +122,11 @@ def test_build_data_from_registers_marks_optional_features_unavailable():
 
     assert data["auto_start"] is None
     assert data["display_enabled"] is None
+
+
+def test_known_product_id_maps_c026_to_evcs_ns():
+    """The EVCS NS product ID should report the current model name."""
+    assert KNOWN_EVCS_PRODUCT_IDS[0xC026] == "EVCS NS"
 
 
 def test_build_data_marks_charging_complete_as_not_actively_charging():
@@ -406,6 +412,62 @@ def test_detect_profile_auto_treats_unknown_nonzero_product_as_evcs(monkeypatch)
     assert profile.key == PROFILE_EVCS
     assert device_info[CONF_CHARGER_MODEL] == "EVCS (0xC099)"
     assert device_info["charger_position"] == "AC Input 2"
+
+
+def test_handle_transport_error_includes_operation_and_exception_details():
+    """Transport errors should preserve the failing operation and root exception."""
+    hub = VictronEvseModbusHub(
+        host="192.168.5.48",
+        port=502,
+        slave=1,
+        timeout=5,
+        register_profile=PROFILE_AUTO,
+    )
+
+    class DummyClient:
+        socket = None
+
+        def close(self):
+            return None
+
+    hub._client = DummyClient()
+
+    with pytest.raises(
+        VictronEvseModbusError,
+        match=(
+            "Unexpected Modbus error during read holding registers 5000:1 "
+            "while talking to 192.168.5.48:502: RuntimeError: boom"
+        ),
+    ):
+        hub._handle_transport_error(RuntimeError("boom"), "read holding registers 5000:1")
+
+
+def test_handle_transport_error_preserves_modbus_exception_text():
+    """Pymodbus exceptions should keep the original library error message."""
+    hub = VictronEvseModbusHub(
+        host="192.168.5.48",
+        port=502,
+        slave=1,
+        timeout=5,
+        register_profile=PROFILE_AUTO,
+    )
+
+    class DummyClient:
+        socket = None
+
+        def close(self):
+            return None
+
+    hub._client = DummyClient()
+
+    with pytest.raises(
+        VictronEvseModbusError,
+        match=(
+            "Modbus error during open TCP connection while talking to "
+            "192.168.5.48:502: Modbus Error: failure"
+        ),
+    ):
+        hub._handle_transport_error(ModbusException("failure"), "open TCP connection")
 
 
 def test_detect_profile_auto_falls_back_to_evse(monkeypatch):

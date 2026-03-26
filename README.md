@@ -41,8 +41,9 @@ The config flow asks for:
 - Modbus TCP port
 - Register profile (`Auto-detect`, `EVCS`, or `EVSE`)
 - Modbus slave ID
+- Modbus timeout
 
-To change the IP address or port later, open the integration in Home Assistant and use `Reconfigure`. The reconfigure flow lets you update the host, port, profile, and slave ID without removing and re-adding the device.
+To change the IP address or port later, open the integration in Home Assistant and use `Reconfigure`. The reconfigure flow lets you update the host, port, profile, slave ID, and timeout without removing and re-adding the device.
 
 The options flow lets you tune:
 

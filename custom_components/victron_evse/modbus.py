@@ -83,7 +83,7 @@ KNOWN_EVCS_PRODUCT_IDS: dict[int, str] = {
     0xC023: "EVCS 32A V2",
     0xC024: "AC22",
     0xC025: "AC22E",
-    0xC026: "AC22NS",
+    0xC026: "EVCS NS",
     0xC027: "EVCS 32A NS V2",
 }
 
@@ -255,9 +255,16 @@ class VictronEvseModbusHub:
                         self._active_profile, product_id
                     )
                     return self._active_profile, self._device_info
-            except VictronEvseModbusError:
+            except VictronEvseModbusError as err:
                 if self._register_profile_preference == PROFILE_EVCS:
                     raise
+                _LOGGER.debug(
+                    "EVCS auto-detect probe failed for %s:%s unit %s, falling back to EVSE: %s",
+                    self._host,
+                    self._port,
+                    self._slave,
+                    err,
+                )
 
         self._read_holding_registers(EVSE_PROFILE.main_start, 1)
         self._active_profile = EVSE_PROFILE
@@ -271,7 +278,7 @@ class VictronEvseModbusHub:
             try:
                 response = client.write_register(address=address, value=value, slave=self._slave)
             except Exception as err:
-                self._handle_transport_error(err)
+                self._handle_transport_error(err, f"write register {address}")
             if response.isError():
                 self._reset_client()
                 raise VictronEvseModbusError(
@@ -289,7 +296,9 @@ class VictronEvseModbusHub:
                     slave=self._slave,
                 )
             except Exception as err:
-                self._handle_transport_error(err)
+                self._handle_transport_error(
+                    err, f"read holding registers {address}:{count}"
+                )
 
             if response.isError():
                 self._reset_client()
@@ -388,7 +397,7 @@ class VictronEvseModbusHub:
         try:
             connected = self._client.connect()
         except Exception as err:
-            self._handle_transport_error(err)
+            self._handle_transport_error(err, "open TCP connection")
 
         if not connected:
             self._reset_client()
@@ -398,14 +407,43 @@ class VictronEvseModbusHub:
 
         return self._client
 
-    def _handle_transport_error(self, err: Exception) -> None:
+    def _handle_transport_error(self, err: Exception, operation: str) -> None:
         """Reset the client and raise a normalized exception."""
+        details = f"during {operation} " if operation else ""
+        socket_info = self._socket_endpoints()
         self._reset_client()
         if isinstance(err, ModbusException):
-            raise VictronEvseModbusError(str(err)) from err
+            raise VictronEvseModbusError(
+                f"Modbus error {details}while talking to {self._host}:{self._port}{socket_info}: {err}"
+            ) from err
         raise VictronEvseModbusError(
-            f"Unexpected Modbus error while talking to {self._host}:{self._port}"
+            f"Unexpected Modbus error {details}while talking to {self._host}:{self._port}{socket_info}: "
+            f"{type(err).__name__}: {err}"
         ) from err
+
+    def _socket_endpoints(self) -> str:
+        """Describe the local and remote socket endpoints when available."""
+        if self._client is None or self._client.socket is None:
+            return ""
+
+        parts: list[str] = []
+        try:
+            local = self._client.socket.getsockname()
+        except OSError:
+            local = None
+        if local is not None:
+            parts.append(f" local={local[0]}:{local[1]}")
+
+        try:
+            remote = self._client.socket.getpeername()
+        except OSError:
+            remote = None
+        if remote is not None:
+            parts.append(f" peer={remote[0]}:{remote[1]}")
+
+        if not parts:
+            return ""
+        return f" ({', '.join(parts)})"
 
     def _reset_client(self) -> None:
         """Reset the client after a failed request."""

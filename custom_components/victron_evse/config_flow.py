@@ -74,10 +74,14 @@ def _normalize_host(host: str) -> str:
 def _normalized_modbus_input(data: dict[str, Any]) -> dict[str, Any]:
     """Normalize user-entered Modbus settings from selectors/forms."""
     normalized = dict(data)
+    if CONF_HOST in normalized:
+        normalized[CONF_HOST] = str(normalized[CONF_HOST]).strip()
     if CONF_PORT in normalized:
         normalized[CONF_PORT] = int(normalized[CONF_PORT])
     if CONF_SLAVE in normalized:
         normalized[CONF_SLAVE] = int(normalized[CONF_SLAVE])
+    if CONF_TIMEOUT in normalized:
+        normalized[CONF_TIMEOUT] = int(normalized[CONF_TIMEOUT])
     return normalized
 
 
@@ -120,10 +124,13 @@ async def validate_input(
         host=normalized[CONF_HOST],
         port=normalized[CONF_PORT],
         slave=normalized[CONF_SLAVE],
-        timeout=(
-            existing_entry.options.get(CONF_TIMEOUT, DEFAULT_TIMEOUT)
-            if existing_entry is not None
-            else DEFAULT_TIMEOUT
+        timeout=normalized.get(
+            CONF_TIMEOUT,
+            (
+                existing_entry.options.get(CONF_TIMEOUT, DEFAULT_TIMEOUT)
+                if existing_entry is not None
+                else DEFAULT_TIMEOUT
+            ),
         ),
         register_profile=normalized.get(CONF_REGISTER_PROFILE, DEFAULT_REGISTER_PROFILE),
     )
@@ -209,7 +216,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         CONF_REGISTER_PROFILE: info[CONF_REGISTER_PROFILE],
                         CONF_SCAN_INTERVAL: DEFAULT_SCAN_INTERVAL,
                         CONF_IDLE_SCAN_INTERVAL: DEFAULT_IDLE_SCAN_INTERVAL,
-                        CONF_TIMEOUT: DEFAULT_TIMEOUT,
+                        CONF_TIMEOUT: normalized_input[CONF_TIMEOUT],
                     },
                 )
 
@@ -228,6 +235,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     ): _profile_selector(DEFAULT_REGISTER_PROFILE),
                     vol.Required(CONF_SLAVE, default=DEFAULT_SLAVE): _number_box_selector(
                         1, 247
+                    ),
+                    vol.Required(CONF_TIMEOUT, default=DEFAULT_TIMEOUT): vol.All(
+                        vol.Coerce(int), vol.Range(min=1, max=60)
                     ),
                 }
             ),
@@ -283,6 +293,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     options={
                         **entry.options,
                         CONF_REGISTER_PROFILE: info[CONF_REGISTER_PROFILE],
+                        CONF_TIMEOUT: normalized_input[CONF_TIMEOUT],
                     },
                     reason="reconfigure_successful",
                 )
@@ -316,6 +327,10 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         CONF_SLAVE,
                         default=entry.data[CONF_SLAVE],
                     ): _number_box_selector(1, 247),
+                    vol.Required(
+                        CONF_TIMEOUT,
+                        default=entry.options.get(CONF_TIMEOUT, DEFAULT_TIMEOUT),
+                    ): vol.All(vol.Coerce(int), vol.Range(min=1, max=60)),
                 }
             ),
             errors=errors,

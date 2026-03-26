@@ -10,14 +10,16 @@
           "host": "Host",
           "port": "Port",
           "register_profile": "Register profile",
-          "slave": "Modbus slave ID"
+          "slave": "Modbus slave ID",
+          "timeout": "Modbus timeout"
         },
         "data_description": {
           "name": "Name used for the charger device in Home Assistant.",
           "host": "Static IP address or hostname of the Victron EV Charging Station.",
           "port": "Modbus TCP port exposed by the charger.",
           "register_profile": "Use Auto-detect for most chargers. Choose EVCS for the current Victron EV Charging Station map or EVSE for the legacy map.",
-          "slave": "Modbus slave ID configured on the charger."
+          "slave": "Modbus slave ID configured on the charger.",
+          "timeout": "Maximum number of seconds to wait for a Modbus response during validation."
         }
       },
       "reconfigure": {
@@ -27,7 +29,8 @@
           "host": "Host",
           "port": "Port",
           "register_profile": "Register profile",
-          "slave": "Modbus slave ID"
+          "slave": "Modbus slave ID",
+          "timeout": "Modbus timeout"
         }
       }
     },

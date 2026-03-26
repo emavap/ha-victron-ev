@@ -61,6 +61,7 @@ async def test_user_flow_creates_entry(hass):
                 CONF_PORT: 502,
                 CONF_REGISTER_PROFILE: DEFAULT_REGISTER_PROFILE,
                 CONF_SLAVE: 1,
+                CONF_TIMEOUT: DEFAULT_TIMEOUT,
             },
         )
 
@@ -373,6 +374,44 @@ async def test_validate_input_normalizes_selector_number_values(hass):
                 CONF_PORT: 502,
                 CONF_REGISTER_PROFILE: PROFILE_EVCS,
                 CONF_SLAVE: 1.0,
+                CONF_TIMEOUT: 7.0,
+            },
+        )
+
+    hub_class.assert_called_once_with(
+        host="192.168.5.48",
+        port=502,
+        slave=1,
+        timeout=7,
+        register_profile=PROFILE_EVCS,
+    )
+
+
+@pytest.mark.asyncio
+async def test_validate_input_trims_host_before_connecting(hass):
+    """Validation should trim pasted whitespace around the host value."""
+    hub = Mock()
+    hub.detect_profile.return_value = (
+        EVCS_PROFILE,
+        {
+            CONF_CHARGER_MODEL: "EVCS NS",
+            CONF_DEVICE_SERIAL: "HQ123456",
+        },
+    )
+
+    with patch(
+        "custom_components.victron_evse.config_flow.VictronEvseModbusHub",
+        return_value=hub,
+    ) as hub_class:
+        result = await validate_input(
+            hass,
+            {
+                CONF_NAME: "Garage Charger",
+                CONF_HOST: " 192.168.5.48 ",
+                CONF_PORT: 502,
+                CONF_REGISTER_PROFILE: PROFILE_EVCS,
+                CONF_SLAVE: 1,
+                CONF_TIMEOUT: DEFAULT_TIMEOUT,
             },
         )
 
@@ -383,6 +422,7 @@ async def test_validate_input_normalizes_selector_number_values(hass):
         timeout=DEFAULT_TIMEOUT,
         register_profile=PROFILE_EVCS,
     )
+    assert result["title"] == "Garage Charger"
 
 
 @pytest.mark.asyncio
@@ -413,6 +453,7 @@ async def test_reconfigure_flow_updates_host_and_port(hass):
                 CONF_PORT: 502,
                 CONF_REGISTER_PROFILE: DEFAULT_REGISTER_PROFILE,
                 CONF_SLAVE: 1,
+                CONF_TIMEOUT: DEFAULT_TIMEOUT,
             },
         )
 
@@ -452,6 +493,7 @@ async def test_reconfigure_flow_updates_host_and_port(hass):
                 CONF_PORT: 1502,
                 CONF_REGISTER_PROFILE: PROFILE_EVSE,
                 CONF_SLAVE: 1,
+                CONF_TIMEOUT: 11,
             },
         )
 
@@ -461,6 +503,7 @@ async def test_reconfigure_flow_updates_host_and_port(hass):
     assert entry.data[CONF_PORT] == 1502
     assert entry.data[CONF_SLAVE] == 1
     assert entry.options[CONF_REGISTER_PROFILE] == PROFILE_EVSE
+    assert entry.options[CONF_TIMEOUT] == 11
 
 
 @pytest.mark.asyncio
@@ -492,6 +535,7 @@ async def test_user_flow_aborts_on_duplicate_network_target(hass):
             CONF_PORT: 502,
             CONF_REGISTER_PROFILE: PROFILE_EVCS,
             CONF_SLAVE: 1,
+            CONF_TIMEOUT: DEFAULT_TIMEOUT,
         },
     )
 
