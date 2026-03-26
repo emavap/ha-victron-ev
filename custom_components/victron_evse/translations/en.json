@@ -1,5 +1,5 @@
 {
-  "title": "Victron EVSE",
+  "title": "Victron EV Charger",
   "config": {
     "flow_title": "{name}",
     "step": {
@@ -9,12 +9,14 @@
           "name": "Name",
           "host": "Host",
           "port": "Port",
+          "register_profile": "Register profile",
           "slave": "Modbus slave ID"
         },
         "data_description": {
           "name": "Name used for the charger device in Home Assistant.",
           "host": "Static IP address or hostname of the Victron EV Charging Station.",
           "port": "Modbus TCP port exposed by the charger.",
+          "register_profile": "Use Auto-detect for most chargers. Choose EVCS for the current Victron EV Charging Station map or EVSE for the legacy map.",
           "slave": "Modbus slave ID configured on the charger."
         }
       },
@@ -24,6 +26,7 @@
           "name": "Name",
           "host": "Host",
           "port": "Port",
+          "register_profile": "Register profile",
           "slave": "Modbus slave ID"
         }
       }
@@ -43,11 +46,13 @@
       "init": {
         "title": "Polling settings",
         "data": {
+          "register_profile": "Register profile",
           "scan_interval": "Active polling interval",
           "idle_scan_interval": "Idle polling interval",
           "timeout": "Modbus timeout"
         },
         "data_description": {
+          "register_profile": "Change this only if auto-detection picked the wrong Victron charger register map.",
           "scan_interval": "Seconds between refreshes when the charger is connected, charging, or in an active status.",
           "idle_scan_interval": "Seconds between refreshes while the charger is disconnected.",
           "timeout": "Maximum number of seconds to wait for a Modbus response."
@@ -84,8 +89,26 @@
       "detected_phases": {
         "name": "Detected car phases"
       },
+      "product_id": {
+        "name": "Product ID"
+      },
       "charger_status": {
         "name": "Charger status"
+      },
+      "serial_number": {
+        "name": "Serial number"
+      },
+      "firmware_version": {
+        "name": "Firmware version"
+      },
+      "device_custom_name": {
+        "name": "Custom name"
+      },
+      "charger_position": {
+        "name": "Charger position"
+      },
+      "register_profile": {
+        "name": "Register profile"
       },
       "session_time_hms": {
         "name": "Session time (HH:MM:SS)"
@@ -100,6 +123,9 @@
       },
       "start_stop_available": {
         "name": "Start/stop available"
+      },
+      "display_enabled": {
+        "name": "Display enabled"
       }
     },
     "number": {

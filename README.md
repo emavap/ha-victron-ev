@@ -1,6 +1,6 @@
-# Victron EVSE for Home Assistant
+# Victron EV Charger for Home Assistant
 
-This repository contains a HACS-installable custom integration for the Victron EV Charging Station. It replaces the original package-style `modbus.yaml` and `templates.yaml` approach with a native Home Assistant integration that supports UI setup through config flow.
+This repository contains a HACS-installable custom integration for Victron EV chargers. It replaces the original package-style `modbus.yaml` and `templates.yaml` approach with a native Home Assistant integration that supports UI setup through config flow.
 
 ## Features
 
@@ -8,6 +8,7 @@ This repository contains a HACS-installable custom integration for the Victron E
 - Home Assistant config flow and reconfigure support
 - Native entities instead of YAML templates
 - Direct Modbus TCP communication
+- Support for both the legacy EVSE register map and the current EVCS register map
 - Automatic fast polling while the charger is active and slower polling while idle
 
 ## Exposed entities
@@ -21,7 +22,7 @@ This repository contains a HACS-installable custom integration for the Victron E
 ## Installation
 
 1. Add this repository to HACS as a custom repository of type `Integration`.
-2. Install `Victron EVSE`.
+2. Install `Victron EV Charger`.
 3. Restart Home Assistant.
 4. Add the integration from `Settings -> Devices & services`.
 
@@ -32,10 +33,12 @@ The config flow asks for:
 - Charger name
 - Host or static IP
 - Modbus TCP port
+- Register profile (`Auto-detect`, `EVCS`, or `EVSE`)
 - Modbus slave ID
 
 The options flow lets you tune:
 
+- Register profile override
 - Active polling interval
 - Idle polling interval
 - Modbus timeout

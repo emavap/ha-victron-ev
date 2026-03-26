@@ -1,4 +1,4 @@
-"""Config flow for the Victron EVSE integration."""
+"""Config flow for the Victron EV charger integration."""
 
 from __future__ import annotations
 
@@ -10,23 +10,45 @@ from homeassistant import config_entries
 from homeassistant.const import CONF_HOST, CONF_NAME, CONF_PORT
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowResult
+from homeassistant.helpers import selector
 
 from .const import (
+    CONF_CHARGER_MODEL,
+    CONF_DEVICE_SERIAL,
     CONF_IDLE_SCAN_INTERVAL,
+    CONF_REGISTER_PROFILE,
     CONF_SCAN_INTERVAL,
     CONF_SLAVE,
     CONF_TIMEOUT,
     DEFAULT_IDLE_SCAN_INTERVAL,
     DEFAULT_NAME,
     DEFAULT_PORT,
+    DEFAULT_REGISTER_PROFILE,
     DEFAULT_SCAN_INTERVAL,
     DEFAULT_SLAVE,
     DEFAULT_TIMEOUT,
     DOMAIN,
+    PROFILE_AUTO,
+    PROFILE_EVCS,
+    PROFILE_EVSE,
 )
 from .modbus import VictronEvseModbusError, VictronEvseModbusHub
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _profile_selector(default: str):
+    """Build the shared register profile selector."""
+    return selector.SelectSelector(
+        selector.SelectSelectorConfig(
+            options=[
+                selector.SelectOptionDict(value=PROFILE_AUTO, label="Auto-detect"),
+                selector.SelectOptionDict(value=PROFILE_EVCS, label="EVCS"),
+                selector.SelectOptionDict(value=PROFILE_EVSE, label="EVSE"),
+            ],
+            mode=selector.SelectSelectorMode.DROPDOWN,
+        )
+    )
 
 
 async def validate_input(hass, data: dict[str, Any]) -> dict[str, str]:
@@ -36,23 +58,33 @@ async def validate_input(hass, data: dict[str, Any]) -> dict[str, str]:
         port=data[CONF_PORT],
         slave=data[CONF_SLAVE],
         timeout=DEFAULT_TIMEOUT,
+        register_profile=data.get(CONF_REGISTER_PROFILE, DEFAULT_REGISTER_PROFILE),
     )
     try:
-        await hass.async_add_executor_job(hub.validate_connection)
+        profile, device_info = await hass.async_add_executor_job(hub.detect_profile)
     except VictronEvseModbusError as err:
         raise CannotConnect from err
     finally:
         await hass.async_add_executor_job(hub.close)
 
     host = str(data[CONF_HOST]).strip().lower()
+    serial = device_info.get(CONF_DEVICE_SERIAL)
+    unique_id = (
+        f"victron_{serial.lower()}"
+        if isinstance(serial, str) and serial
+        else f"{host}:{data[CONF_PORT]}:{data[CONF_SLAVE]}"
+    )
     return {
         "title": data.get(CONF_NAME) or f"{DEFAULT_NAME} ({data[CONF_HOST]})",
-        "unique_id": f"{host}:{data[CONF_PORT]}:{data[CONF_SLAVE]}",
+        "unique_id": unique_id,
+        CONF_REGISTER_PROFILE: profile.key,
+        CONF_CHARGER_MODEL: device_info.get(CONF_CHARGER_MODEL),
+        CONF_DEVICE_SERIAL: serial,
     }
 
 
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Handle a config flow for Victron EVSE."""
+    """Handle a config flow for Victron EV charger."""
 
     VERSION = 1
 
@@ -80,7 +112,10 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         CONF_NAME: user_input.get(CONF_NAME) or DEFAULT_NAME,
                         CONF_HOST: user_input[CONF_HOST],
                         CONF_PORT: user_input[CONF_PORT],
+                        CONF_REGISTER_PROFILE: info[CONF_REGISTER_PROFILE],
                         CONF_SLAVE: user_input[CONF_SLAVE],
+                        CONF_CHARGER_MODEL: info.get(CONF_CHARGER_MODEL),
+                        CONF_DEVICE_SERIAL: info.get(CONF_DEVICE_SERIAL),
                     },
                     options={
                         CONF_SCAN_INTERVAL: DEFAULT_SCAN_INTERVAL,
@@ -98,6 +133,10 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     vol.Required(CONF_PORT, default=DEFAULT_PORT): vol.All(
                         vol.Coerce(int), vol.Range(min=1, max=65535)
                     ),
+                    vol.Required(
+                        CONF_REGISTER_PROFILE,
+                        default=DEFAULT_REGISTER_PROFILE,
+                    ): _profile_selector(DEFAULT_REGISTER_PROFILE),
                     vol.Required(CONF_SLAVE, default=DEFAULT_SLAVE): vol.All(
                         vol.Coerce(int), vol.Range(min=1, max=247)
                     ),
@@ -137,7 +176,10 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         CONF_NAME: user_input.get(CONF_NAME) or DEFAULT_NAME,
                         CONF_HOST: user_input[CONF_HOST],
                         CONF_PORT: user_input[CONF_PORT],
+                        CONF_REGISTER_PROFILE: info[CONF_REGISTER_PROFILE],
                         CONF_SLAVE: user_input[CONF_SLAVE],
+                        CONF_CHARGER_MODEL: info.get(CONF_CHARGER_MODEL),
+                        CONF_DEVICE_SERIAL: info.get(CONF_DEVICE_SERIAL),
                     },
                     reason="reconfigure_successful",
                 )
@@ -150,14 +192,17 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         CONF_NAME,
                         default=entry.data.get(CONF_NAME, DEFAULT_NAME),
                     ): str,
-                    vol.Required(
-                        CONF_HOST,
-                        default=entry.data[CONF_HOST],
-                    ): str,
+                    vol.Required(CONF_HOST, default=entry.data[CONF_HOST]): str,
                     vol.Required(
                         CONF_PORT,
                         default=entry.data[CONF_PORT],
                     ): vol.All(vol.Coerce(int), vol.Range(min=1, max=65535)),
+                    vol.Required(
+                        CONF_REGISTER_PROFILE,
+                        default=entry.data.get(CONF_REGISTER_PROFILE, DEFAULT_REGISTER_PROFILE),
+                    ): _profile_selector(
+                        entry.data.get(CONF_REGISTER_PROFILE, DEFAULT_REGISTER_PROFILE)
+                    ),
                     vol.Required(
                         CONF_SLAVE,
                         default=entry.data[CONF_SLAVE],
@@ -184,7 +229,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 
 class VictronEvseOptionsFlow(config_entries.OptionsFlow):
-    """Handle options for Victron EVSE."""
+    """Handle options for Victron EV charger."""
 
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
         """Initialize the options flow."""
@@ -195,12 +240,39 @@ class VictronEvseOptionsFlow(config_entries.OptionsFlow):
     ) -> FlowResult:
         """Manage the integration options."""
         if user_input is not None:
-            return self.async_create_entry(title="", data=user_input)
+            if user_input[CONF_REGISTER_PROFILE] != self._config_entry.data.get(
+                CONF_REGISTER_PROFILE, DEFAULT_REGISTER_PROFILE
+            ):
+                self.hass.config_entries.async_update_entry(
+                    self._config_entry,
+                    data={
+                        **self._config_entry.data,
+                        CONF_REGISTER_PROFILE: user_input[CONF_REGISTER_PROFILE],
+                    },
+                )
+            return self.async_create_entry(
+                title="",
+                data={
+                    CONF_SCAN_INTERVAL: user_input[CONF_SCAN_INTERVAL],
+                    CONF_IDLE_SCAN_INTERVAL: user_input[CONF_IDLE_SCAN_INTERVAL],
+                    CONF_TIMEOUT: user_input[CONF_TIMEOUT],
+                },
+            )
 
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema(
                 {
+                    vol.Required(
+                        CONF_REGISTER_PROFILE,
+                        default=self._config_entry.data.get(
+                            CONF_REGISTER_PROFILE, DEFAULT_REGISTER_PROFILE
+                        ),
+                    ): _profile_selector(
+                        self._config_entry.data.get(
+                            CONF_REGISTER_PROFILE, DEFAULT_REGISTER_PROFILE
+                        )
+                    ),
                     vol.Required(
                         CONF_SCAN_INTERVAL,
                         default=self._config_entry.options.get(

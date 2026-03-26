@@ -1,4 +1,4 @@
-"""Select entities for Victron EVSE."""
+"""Select entities for Victron EV charger."""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ async def async_setup_entry(
 
 
 class VictronChargeModeSelect(VictronEvseEntity, SelectEntity):
-    """Control the EVSE charge mode."""
+    """Control the charger mode."""
 
     _attr_translation_key = "charge_mode"
     _attr_icon = "mdi:knob"
@@ -36,7 +36,8 @@ class VictronChargeModeSelect(VictronEvseEntity, SelectEntity):
     @property
     def current_option(self) -> str | None:
         """Return the current selected option."""
-        return self.coordinator.data.get("charge_mode_option")
+        option = self.coordinator.data.get("charge_mode_option")
+        return option if option in self.options else None
 
     async def async_select_option(self, option: str) -> None:
         """Change the EVSE charge mode."""

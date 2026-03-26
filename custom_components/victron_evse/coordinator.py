@@ -1,4 +1,4 @@
-"""Coordinator for the Victron EVSE integration."""
+"""Coordinator for the Victron EV charger integration."""
 
 from __future__ import annotations
 
@@ -13,7 +13,10 @@ from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import (
+    CONF_CHARGER_MODEL,
+    CONF_DEVICE_SERIAL,
     CONF_IDLE_SCAN_INTERVAL,
+    CONF_REGISTER_PROFILE,
     CONF_SCAN_INTERVAL,
     CONF_SLAVE,
     CONF_TIMEOUT,
@@ -31,7 +34,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class VictronEvseCoordinator(DataUpdateCoordinator[dict[str, Any]]):
-    """Coordinate EVSE data updates."""
+    """Coordinate EV charger data updates."""
 
     config_entry: ConfigEntry
 
@@ -41,6 +44,7 @@ class VictronEvseCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.hub = VictronEvseModbusHub(
             host=entry.data[CONF_HOST],
             port=entry.data[CONF_PORT],
+            register_profile=entry.data.get(CONF_REGISTER_PROFILE, "auto"),
             slave=entry.data[CONF_SLAVE],
             timeout=entry.options.get(CONF_TIMEOUT, DEFAULT_TIMEOUT),
         )
@@ -61,10 +65,23 @@ class VictronEvseCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     @property
     def device_info(self) -> dict[str, Any]:
         """Return static device info for all entities."""
+        current_data = self.data if isinstance(self.data, dict) else {}
         return {
-            "identifiers": {(DOMAIN, self.config_entry.unique_id or self.config_entry.entry_id)},
+            "identifiers": {
+                (
+                    DOMAIN,
+                    self.config_entry.data.get(CONF_DEVICE_SERIAL)
+                    or current_data.get(CONF_DEVICE_SERIAL)
+                    or self.config_entry.unique_id
+                    or self.config_entry.entry_id,
+                )
+            },
             "manufacturer": MANUFACTURER,
-            "model": MODEL,
+            "model": (
+                self.config_entry.data.get(CONF_CHARGER_MODEL)
+                or current_data.get(CONF_CHARGER_MODEL)
+                or MODEL
+            ),
             "name": self.device_name,
             "configuration_url": f"http://{self.config_entry.data[CONF_HOST]}",
         }

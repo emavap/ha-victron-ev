@@ -1,6 +1,6 @@
 {
   "domain": "victron_evse",
-  "name": "Victron EVSE",
+  "name": "Victron EV Charger",
   "version": "1.0.0",
   "documentation": "https://github.com/emavap/ha-victron-ev",
   "issue_tracker": "https://github.com/emavap/ha-victron-ev/issues",

@@ -1,5 +1,5 @@
 {
-  "name": "Victron EVSE",
+  "name": "Victron EV Charger",
   "content_in_root": false,
   "filename": "victron_evse",
   "domain": "victron_evse",

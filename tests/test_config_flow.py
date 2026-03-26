@@ -7,16 +7,23 @@ from homeassistant.const import CONF_HOST, CONF_NAME, CONF_PORT
 from homeassistant.data_entry_flow import FlowResultType
 
 from custom_components.victron_evse.const import (
+    CONF_CHARGER_MODEL,
+    CONF_DEVICE_SERIAL,
     CONF_IDLE_SCAN_INTERVAL,
+    CONF_REGISTER_PROFILE,
     CONF_SCAN_INTERVAL,
     CONF_SLAVE,
     CONF_TIMEOUT,
     DEFAULT_NAME,
+    DEFAULT_REGISTER_PROFILE,
     DEFAULT_IDLE_SCAN_INTERVAL,
     DEFAULT_SCAN_INTERVAL,
     DEFAULT_TIMEOUT,
     DOMAIN,
+    PROFILE_EVCS,
 )
+from custom_components.victron_evse.config_flow import validate_input
+from custom_components.victron_evse.modbus import EVCS_PROFILE
 
 
 @pytest.mark.asyncio
@@ -28,6 +35,9 @@ async def test_user_flow_creates_entry(hass):
             return_value={
                 "title": "Garage Charger",
                 "unique_id": "10.0.0.2:502:1",
+                CONF_REGISTER_PROFILE: PROFILE_EVCS,
+                CONF_CHARGER_MODEL: "EVCS 32A V2",
+                CONF_DEVICE_SERIAL: "HQ123456",
             }
         ),
     ):
@@ -44,6 +54,7 @@ async def test_user_flow_creates_entry(hass):
                 CONF_NAME: "Garage Charger",
                 CONF_HOST: "10.0.0.2",
                 CONF_PORT: 502,
+                CONF_REGISTER_PROFILE: DEFAULT_REGISTER_PROFILE,
                 CONF_SLAVE: 1,
             },
         )
@@ -54,7 +65,10 @@ async def test_user_flow_creates_entry(hass):
         CONF_NAME: "Garage Charger",
         CONF_HOST: "10.0.0.2",
         CONF_PORT: 502,
+        CONF_REGISTER_PROFILE: PROFILE_EVCS,
         CONF_SLAVE: 1,
+        CONF_CHARGER_MODEL: "EVCS 32A V2",
+        CONF_DEVICE_SERIAL: "HQ123456",
     }
     assert result["options"] == {
         CONF_SCAN_INTERVAL: DEFAULT_SCAN_INTERVAL,
@@ -76,6 +90,9 @@ async def test_options_flow_updates_intervals(hass):
                 return_value={
                     "title": DEFAULT_NAME,
                     "unique_id": "10.0.0.2:502:1",
+                    CONF_REGISTER_PROFILE: PROFILE_EVCS,
+                    CONF_CHARGER_MODEL: "EVCS 32A V2",
+                    CONF_DEVICE_SERIAL: "HQ123456",
                 }
             ),
         ):
@@ -89,6 +106,7 @@ async def test_options_flow_updates_intervals(hass):
                     CONF_NAME: DEFAULT_NAME,
                     CONF_HOST: "10.0.0.2",
                     CONF_PORT: 502,
+                    CONF_REGISTER_PROFILE: DEFAULT_REGISTER_PROFILE,
                     CONF_SLAVE: 1,
                 },
             )
@@ -100,6 +118,7 @@ async def test_options_flow_updates_intervals(hass):
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
         {
+            CONF_REGISTER_PROFILE: PROFILE_EVCS,
             CONF_SCAN_INTERVAL: 15,
             CONF_IDLE_SCAN_INTERVAL: 240,
             CONF_TIMEOUT: 7,
@@ -112,3 +131,68 @@ async def test_options_flow_updates_intervals(hass):
         CONF_IDLE_SCAN_INTERVAL: 240,
         CONF_TIMEOUT: 7,
     }
+    assert existing_entry.data[CONF_REGISTER_PROFILE] == PROFILE_EVCS
+
+
+@pytest.mark.asyncio
+async def test_validate_input_uses_detected_profile_and_serial_unique_id(hass):
+    """Validation should persist the detected profile and stable serial identity."""
+    with patch(
+        "custom_components.victron_evse.config_flow.VictronEvseModbusHub.detect_profile",
+        return_value=(
+            EVCS_PROFILE,
+            {
+                CONF_CHARGER_MODEL: "EVCS 32A V2",
+                CONF_DEVICE_SERIAL: "HQ123456",
+            },
+        ),
+    ), patch(
+        "custom_components.victron_evse.config_flow.VictronEvseModbusHub.close",
+        return_value=None,
+    ):
+        result = await validate_input(
+            hass,
+            {
+                CONF_NAME: "Garage Charger",
+                CONF_HOST: "10.0.0.2",
+                CONF_PORT: 502,
+                CONF_REGISTER_PROFILE: DEFAULT_REGISTER_PROFILE,
+                CONF_SLAVE: 1,
+            },
+        )
+
+    assert result["title"] == "Garage Charger"
+    assert result["unique_id"] == "victron_hq123456"
+    assert result[CONF_REGISTER_PROFILE] == PROFILE_EVCS
+    assert result[CONF_CHARGER_MODEL] == "EVCS 32A V2"
+    assert result[CONF_DEVICE_SERIAL] == "HQ123456"
+
+
+@pytest.mark.asyncio
+async def test_validate_input_falls_back_to_host_identity_without_serial(hass):
+    """Validation should keep the network identity when no serial is available."""
+    with patch(
+        "custom_components.victron_evse.config_flow.VictronEvseModbusHub.detect_profile",
+        return_value=(
+            EVCS_PROFILE,
+            {
+                CONF_CHARGER_MODEL: "EVCS 32A V2",
+                CONF_DEVICE_SERIAL: None,
+            },
+        ),
+    ), patch(
+        "custom_components.victron_evse.config_flow.VictronEvseModbusHub.close",
+        return_value=None,
+    ):
+        result = await validate_input(
+            hass,
+            {
+                CONF_NAME: DEFAULT_NAME,
+                CONF_HOST: "10.0.0.2",
+                CONF_PORT: 502,
+                CONF_REGISTER_PROFILE: DEFAULT_REGISTER_PROFILE,
+                CONF_SLAVE: 1,
+            },
+        )
+
+    assert result["unique_id"] == "10.0.0.2:502:1"

@@ -79,6 +79,14 @@ class VictronAutoStartSwitch(VictronEvseEntity, SwitchEntity):
         """Return true when auto-start is enabled."""
         return bool(self.coordinator.data.get(REGISTER_AUTO_START))
 
+    @property
+    def available(self) -> bool:
+        """Return true when the charger exposes the auto-start register."""
+        return (
+            super().available
+            and self.coordinator.data.get(REGISTER_AUTO_START) is not None
+        )
+
     async def async_turn_on(self, **kwargs) -> None:
         """Enable auto-start."""
         await self.coordinator.async_write_register(5049, 1)

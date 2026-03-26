@@ -61,6 +61,16 @@ class VictronBinarySensor(VictronEvseEntity, BinarySensorEntity):
         self.entity_description = description
 
     @property
-    def is_on(self) -> bool:
+    def available(self) -> bool:
+        """Return true when the sensor data is available."""
+        return (
+            super().available
+            and self.entity_description.value_key in self.coordinator.data
+            and self.coordinator.data.get(self.entity_description.value_key) is not None
+        )
+
+    @property
+    def is_on(self) -> bool | None:
         """Return true if the binary sensor is active."""
-        return bool(self.coordinator.data.get(self.entity_description.value_key))
+        value = self.coordinator.data.get(self.entity_description.value_key)
+        return None if value is None else bool(value)
