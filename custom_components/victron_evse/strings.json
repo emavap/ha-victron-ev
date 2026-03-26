@@ -1,0 +1,124 @@
+{
+  "title": "Victron EVSE",
+  "config": {
+    "flow_title": "{name}",
+    "step": {
+      "user": {
+        "title": "Connect to your charger",
+        "data": {
+          "name": "Name",
+          "host": "Host",
+          "port": "Port",
+          "slave": "Modbus slave ID"
+        },
+        "data_description": {
+          "name": "Name used for the charger device in Home Assistant.",
+          "host": "Static IP address or hostname of the Victron EV Charging Station.",
+          "port": "Modbus TCP port exposed by the charger.",
+          "slave": "Modbus slave ID configured on the charger."
+        }
+      },
+      "reconfigure": {
+        "title": "Update connection settings",
+        "data": {
+          "name": "Name",
+          "host": "Host",
+          "port": "Port",
+          "slave": "Modbus slave ID"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Unable to connect to the charger over Modbus TCP.",
+      "unknown": "Unexpected error."
+    },
+    "abort": {
+      "already_configured": "This charger is already configured.",
+      "entry_not_found": "The target configuration entry could not be found.",
+      "reconfigure_successful": "The charger settings were updated."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Polling settings",
+        "data": {
+          "scan_interval": "Active polling interval",
+          "idle_scan_interval": "Idle polling interval",
+          "timeout": "Modbus timeout"
+        },
+        "data_description": {
+          "scan_interval": "Seconds between refreshes when the charger is connected, charging, or in an active status.",
+          "idle_scan_interval": "Seconds between refreshes while the charger is disconnected.",
+          "timeout": "Maximum number of seconds to wait for a Modbus response."
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "charging_power": {
+        "name": "Charging power"
+      },
+      "charger_status_code": {
+        "name": "Charger status code"
+      },
+      "max_charging_current": {
+        "name": "Max charging current"
+      },
+      "min_charging_current": {
+        "name": "Min charging current"
+      },
+      "actual_charging_current": {
+        "name": "Actual charging current"
+      },
+      "session_time": {
+        "name": "Session time"
+      },
+      "session_energy": {
+        "name": "Session energy"
+      },
+      "total_energy": {
+        "name": "Total energy"
+      },
+      "detected_phases": {
+        "name": "Detected car phases"
+      },
+      "charger_status": {
+        "name": "Charger status"
+      },
+      "session_time_hms": {
+        "name": "Session time (HH:MM:SS)"
+      }
+    },
+    "binary_sensor": {
+      "vehicle_connected": {
+        "name": "Vehicle connected"
+      },
+      "charging_active": {
+        "name": "Charging active"
+      },
+      "start_stop_available": {
+        "name": "Start/stop available"
+      }
+    },
+    "number": {
+      "manual_charging_current": {
+        "name": "Manual charging current"
+      }
+    },
+    "select": {
+      "charge_mode": {
+        "name": "Charge mode"
+      }
+    },
+    "switch": {
+      "charging": {
+        "name": "Charging"
+      },
+      "auto_start": {
+        "name": "Auto start"
+      }
+    }
+  }
+}

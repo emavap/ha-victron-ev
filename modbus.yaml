@@ -1,0 +1,123 @@
+- name: VictronEVSE
+  type: tcp
+  host: <EVSE static IP>
+  port: 502
+  delay: 5
+  message_wait_milliseconds: 30
+  timeout: 5
+
+  sensors:
+    - name: "EVSE_ChargeMode"
+      unique_id: victron_ev_charge_mode
+      data_type: uint16
+      input_type: holding
+      address: 5009
+      scan_interval: 120
+      device_class: enum
+    - name: "EVSE_ChargingPower"
+      unique_id: victron_ev_charge_power
+      data_type: uint16
+      input_type: holding
+      address: 5014
+      scan_interval: 0
+      scale: 0.001
+      precision: 1
+      unit_of_measurement: "kW"
+      device_class: power
+    - name: "EVSE_ChargerStatus"
+      unique_id: victron_ev_charger_status
+      data_type: uint16
+      input_type: holding
+      address: 5015
+      scan_interval: 10
+      device_class: enum
+    - name: "EVSE_ChargingCurrentManual"
+      unique_id: victron_ev_charge_current_manual
+      data_type: uint16
+      input_type: holding
+      address: 5016
+      scan_interval: 300
+      unit_of_measurement: "A"
+      device_class: current
+    - name: "EVSE_MaxChargingCurrent"
+      unique_id: victron_ev_max_charging_current
+      data_type: uint16
+      input_type: holding
+      address: 5017
+      scan_interval: 300
+      unit_of_measurement: "A"
+    - name: "EVSE_MinChargingCurrent"
+      unique_id: victron_ev_min_charging_current
+      data_type: uint16
+      input_type: holding
+      address: 5062
+      scan_interval: 300
+      unit_of_measurement: "A"
+    - name: "EVSE_ChargeCurrentActual"
+      unique_id: victron_ev_charge_current_actual
+      data_type: uint16
+      input_type: holding
+      address: 5018
+      scan_interval: 0
+      scale: 0.1
+      precision: 1
+      unit_of_measurement: "A"
+      device_class: current
+    - name: "EVSE_SessionTime"
+      unique_id: victron_ev_session_time
+      data_type: uint32
+      input_type: holding
+      address: 5019
+      scan_interval: 0
+      unit_of_measurement: "s"
+      device_class: duration
+    - name: "EVSE_SessionEnergy"
+      unique_id: victron_ev_session_energy
+      data_type: uint16
+      input_type: holding
+      address: 5021
+      scan_interval: 0
+      scale: 0.01
+      precision: 2
+      unit_of_measurement: "kWh"
+      device_class: energy
+    - name: "EVSE_TotalEnergy"
+      unique_id: victron_ev_total_energy
+      data_type: uint32
+      input_type: holding
+      address: 5023
+      # swap: word
+      scan_interval: 300
+      scale: 0.01
+      precision: 1  # Don't want much precision here
+      unit_of_measurement: "kWh"
+      device_class: energy
+      state_class: total_increasing
+    - name: "EVSE_DetectedCarPhases"
+      unique_id: victron_ev_detected_car_phases
+      data_type: uint16
+      input_type: holding
+      address: 5109
+      scan_interval: 0
+
+  switches:
+    - name: "EVSE_StartStopCharging"
+      address: 5010
+      unique_id: victron_ev_start_stop
+      command_on: 1
+      command_off: 0
+      scan_interval: 300
+      verify:
+    - name: "EVSE_AutoStart"
+      address: 5049
+      unique_id: victron_ev_autostart
+      command_on: 1
+      command_off: 0
+      scan_interval: 300
+      verify:
+#    - name: "EVSE_ControlViaDisplay"
+#      address: 5050
+#      unique_id: victron_ev_control_via_displau
+#      command_on: 1
+#      command_off: 0
+#      scan_interval: 10

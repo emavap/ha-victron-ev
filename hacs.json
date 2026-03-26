@@ -1,0 +1,11 @@
+{
+  "name": "Victron EVSE",
+  "content_in_root": false,
+  "filename": "victron_evse",
+  "domain": "victron_evse",
+  "homeassistant": "2024.4.0",
+  "persistent_directory": "custom_components/victron_evse",
+  "render_readme": true,
+  "zip_release": false,
+  "source": "main"
+}

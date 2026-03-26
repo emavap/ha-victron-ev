@@ -1,0 +1,35 @@
+- id: modbus_evse_refresh
+  mode: queued
+  alias: Dynamic Modbus EVSE Refresh
+  triggers:
+    - seconds: /10
+      trigger: time_pattern
+      id: fast
+    - minutes: /3
+      trigger: time_pattern
+      id: slow
+  conditions:
+    # slow | (fast & !0)
+    - or:
+      - condition: trigger
+        id: slow
+      - and:
+        - condition: trigger
+          id: fast
+        - not:
+          - condition: state
+            entity_id: sensor.evse_chargerstatus
+            state:
+              - '0'
+  actions:
+      sequence:
+      - target:
+          entity_id: '{{ read_sensors }}'
+        action: homeassistant.update_entity
+  variables:
+    read_sensors:
+    - sensor.EVSE_ChargingPower
+    - sensor.EVSE_ChargeCurrentActual
+    - sensor.EVSE_SessionTime
+    - sensor.EVSE_SessionEnergy
+    - sensor.EVSE_DetectedCarPhases

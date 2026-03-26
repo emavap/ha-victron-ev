@@ -1,0 +1,190 @@
+- number:
+  - name: "EVSE_Set_ChargingCurrentManual"
+    unique_id: victron_ctrl_charger_manual_current_setter
+    state: "{{ states('sensor.EVSE_ChargingCurrentManual') }}"
+    min: 6
+    max: 32
+    step: 1
+    unit_of_measurement: "A"
+    icon: "mdi:current-ac"
+    set_value:
+      - service: modbus.write_register
+        data:
+          hub: VictronEVSE
+          address: 5016 # Same address as the read sensor
+          value: "{{ value | int }}"
+      - service: homeassistant.update_entity
+        target:
+          entity_id: sensor.EVSE_ChargingCurrentManual
+
+#  - name: "EVSE_Set_MaxChargingCurrent"
+#    unique_id: victron_ctrl_charger_max_current_setter
+#    state: "{{ states('sensor.EVSE_MaxChargingCurrent') }}"
+#    min: 6
+#    max: 32
+#    step: 1
+#    unit_of_measurement: "A"
+#    set_value:
+#      - service: modbus.write_register
+#        data:
+#          hub: VictronEVSE
+#          address: 5017 # Same address as the read sensor
+#          value: "{{ value | int }}"
+
+- select:
+  - name: "EVSE_SetChargerMode"
+    unique_id: victron_ctrl_charger_mode
+    icon: "mdi:knob"
+    state: >
+        {% set mapper = {'0': 'Manual', '1': 'GX Auto', '2': 'Scheduled'} %}
+        {% set val = states('sensor.EVSE_ChargeMode') %}
+        {{ mapper[val] if val in mapper else 'Unknown' }}
+    options: "{{ ['Manual', 'GX Auto', 'Scheduled'] }}"
+    select_option:
+      - service: modbus.write_register
+        data:
+            hub: VictronEVSE
+            address: 5009
+            value: >
+                {% if option == 'Manual' %} 0
+                {% elif option == 'GX Auto' %} 1
+                {% elif option == 'Scheduled' %} 2
+                {% endif %}
+      - service: homeassistant.update_entity
+        target:
+          entity_id: sensor.EVSE_ChargeMode
+
+- sensor:
+  - name: "EVSE_Get_ChargerStatus"
+    unique_id: victron_ctrl_charger_status
+    icon: "mdi:ev-station"
+    state: >
+      {% set mapper = {
+        '0': 'Disconnected',
+        '1': 'Connected',
+        '2': 'Charging',
+        '3': 'Charging Complete',
+        '4': 'Waiting for Sun',
+        '5': 'Waiting for RFID',
+        '6': 'Waiting for Start',
+        '7': 'Low SoC',
+        '8': 'Ground Test Error',
+        '9': 'Contactor Error',
+        '10': 'CP Input Test Error',
+        '11': 'Residual Current Detected',
+        '12': 'Undervoltage Detected',
+        '13': 'Overheating Detectged',
+        '20': 'Charging Limit',
+        '21': 'Start Charging',
+        '22': 'Switching to 3 phase',
+        '23': 'Switching to 1 phase',
+        '24': 'Stop Charging'
+      } %}
+      {% set state_val = states('sensor.EVSE_ChargerStatus') %}
+      {{ mapper[state_val] if state_val in mapper else 'Unknown (' ~ state_val ~ ')' }}
+  - name: "EVSE_Get_SessionTime"
+    unique_id: victron_ctrl_session_time
+    icon: "mdi:timer-outline"
+    state: >
+      {% set total_seconds =  states("sensor.EVSE_SessionTime") %}
+      {% set hours = (total_seconds|int // 3600) %}
+      {% set minutes = (total_seconds|int % 3600) // 60 %}
+      {% set seconds = (total_seconds |int% 60) %}
+      {{ '%02d' % hours }}:{{ '%02d' % minutes }}:{{ '%02d' % seconds }}
+  - name: "EVSE_Get_DetectedCarPhases"
+    unique_id: victron_ctrl_detected_car_phases
+    state: >
+      {% set valid = states('sensor.EVSE_ChargerStatus') | int == 2 %}
+      {% if valid %}
+      {{ states('sensor.EVSE_DetectedCarPhases') }}
+      {% else %}
+      {{ "--" }}
+      {% endif %}
+  - name: "EVSE_SessionTimeAge"
+    unique_id: victron_ctrl_session_time_age
+    state: >
+      {% if is_state('binary_sensor.evse_get_status_connected', 'on') %}
+      {{ 'Active' }}
+      {% else %}
+      {% set last = states.sensor.evse_sessiontime.last_changed %}
+      {{ relative_time(last) }} ago
+      {% endif %}
+
+- trigger:
+  - platform: time_pattern
+    seconds: "/1" # Triggers every second
+  sensor:
+  - name: "EVSE_SessionTimeLive"
+    unique_id: victron_ctrl_session_time_live
+    icon: mdi:timer-outline
+    state: >
+      {% set state_val = states('sensor.EVSE_ChargerStatus') %}
+      {% set session_base =  states("sensor.EVSE_SessionTime") | int %}
+      {% if state_val == '0' %}
+      {% set delta = 0 %}
+      {% else %}
+      {% set last = states.sensor.evse_sessiontime.last_changed %}
+      {% set delta = as_timestamp(now()) - as_timestamp(last) %}
+      {% endif %}
+      {% set total_seconds = session_base + delta %}
+      {% set hours = (total_seconds|int // 3600) %}
+      {% set minutes = (total_seconds|int % 3600) // 60 %}
+      {% set seconds = (total_seconds |int% 60) %}
+      {{ '%02d' % hours }}:{{ '%02d' % minutes }}:{{ '%02d' % seconds }}
+
+- binary_sensor:
+  - name: "EVSE_Get_Status_Connected"
+    unique_id: victron_ctrl_status_connected
+    state: >
+      {% set valid_values = [0] %}
+      {{ states('sensor.EVSE_ChargerStatus') | int not in valid_values }}
+- binary_sensor:
+  - name: "EVSE_Get_StartStopAvailable"
+    unique_id: victron_ctrl_start_stop_available
+    state: >
+      {% set valid_values = [1, 2, 4, 5, 6, 7, 24] %}
+      {{ states('sensor.EVSE_ChargerStatus') | int in valid_values }}
+  - name: "EVSE_Get_StartStopCancellable"
+    unique_id: victron_ctrl_start_stop_cancellable
+    state: >
+      {% set valid_values = [2, 3] %}
+      {{ states('sensor.EVSE_ChargerStatus') | int in valid_values }}
+
+- switch:
+  #- name: "EVSE_Set_StartStopCharging"
+  - name: >-
+      {% set current_name = state_attr(this.entity_id, 'friendly_name') %}
+      {% if current_name is none or current_name == this.entity_id %}
+        EVSE_Set_StartStopCharging
+      {% else %}
+        {% if is_state('binary_sensor.evse_get_startstopavailable', 'off') %}
+          Unavailable
+        {% elif is_state('binary_sensor.evse_get_startstopcancellable', 'on') %}
+          Stop Charging
+        {% else %}
+          Start Charging
+        {% endif %}
+      {% endif %}
+    unique_id: victron_ctrl_start_stop_charging
+    state: "{{ is_state('binary_sensor.evse_get_startstopcancellable', 'on') }}"
+    availability: "{{ is_state('binary_sensor.evse_get_startstopavailable', 'on') }}"
+    turn_on:
+      service: modbus.write_register
+      data:
+        hub: VictronEVSE
+        address: 5010 # Start/Stop register address
+        value: 1
+    turn_off:
+      service: modbus.write_register
+      data:
+        hub: VictronEVSE
+        address: 5010 # Start/Stop register address
+        value: 0
+    icon: >
+      {% if is_state('binary_sensor.evse_get_startstopavailable', 'off') %}
+        mdi:minus
+      {% elif is_state('binary_sensor.evse_get_startstopcancellable', 'on') %}
+        mdi:stop
+      {% else %}
+        mdi:play
+      {% endif %}
