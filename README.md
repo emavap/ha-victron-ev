@@ -44,6 +44,13 @@ The config flow asks for:
 
 To change the IP address or port later, open the integration in Home Assistant and use `Reconfigure`. The reconfigure flow lets you update the host, port, profile, and slave ID without removing and re-adding the device.
 
+The options flow lets you tune:
+
+- Register profile override
+- Active polling interval
+- Idle polling interval
+- Modbus timeout
+
 ## Migrating From YAML
 
 If you previously used the old package-style YAML setup:
@@ -53,13 +60,14 @@ If you previously used the old package-style YAML setup:
 - add this custom integration through the UI and complete the config flow
 - if needed, use `Reconfigure` later to change the charger IP address, port, or slave ID
 
-The options flow lets you tune:
-
-- Register profile override
-- Active polling interval
-- Idle polling interval
-- Modbus timeout
-
 ## Repository layout
 
-The repository contains the HACS custom integration, packaging metadata, tests, and local/CI validation files. The old package-style YAML files and dashboard examples have been removed.
+The repository contains the HACS custom integration, packaging metadata, tests, local/CI validation files, and example Lovelace dashboard YAML in [cards/README.md](cards/README.md).
+
+## Validation
+
+The repository includes a Docker-based test environment and a GitHub Actions workflow that run the test suite for the custom integration.
+
+## Dashboard Example
+
+An example Lovelace dashboard for this integration is available in [cards/victron_ev_charger_dashboard.yaml](cards/victron_ev_charger_dashboard.yaml). If you used a custom device name during setup, replace the default `victron_ev_charger_` entity prefix in that file with your actual entity IDs.
