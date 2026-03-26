@@ -27,7 +27,7 @@ from custom_components.victron_evse.const import (
     PROFILE_EVSE,
 )
 from custom_components.victron_evse.config_flow import ConfigFlow, validate_input
-from custom_components.victron_evse.modbus import EVCS_PROFILE
+from custom_components.victron_evse.modbus import EVCS_PROFILE, VictronEvseModbusError
 
 
 @pytest.mark.asyncio
@@ -161,6 +161,64 @@ async def test_validate_input_uses_detected_profile_and_serial_unique_id(hass):
     assert result[CONF_REGISTER_PROFILE] == PROFILE_EVCS
     assert result[CONF_CHARGER_MODEL] == "EVCS 32A V2"
     assert result[CONF_DEVICE_SERIAL] == "HQ123456"
+
+
+@pytest.mark.asyncio
+async def test_validate_input_logs_modbus_validation_failures(hass, caplog):
+    """Validation failures should log actionable Modbus connection details."""
+    caplog.set_level("WARNING")
+
+    with patch(
+        "custom_components.victron_evse.config_flow.VictronEvseModbusHub.detect_profile",
+        side_effect=Exception("boom"),
+    ), patch(
+        "custom_components.victron_evse.config_flow.VictronEvseModbusHub.close",
+        return_value=None,
+    ):
+        with pytest.raises(Exception, match="boom"):
+            await validate_input(
+                hass,
+                {
+                    CONF_NAME: "Garage Charger",
+                    CONF_HOST: "192.168.5.48",
+                    CONF_PORT: 502,
+                    CONF_REGISTER_PROFILE: PROFILE_EVCS,
+                    CONF_SLAVE: 1,
+                },
+            )
+
+    # Sanity guard: only VictronEvseModbusError should hit the warning path.
+    assert "Modbus validation failed" not in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_validate_input_logs_victron_modbus_errors(hass, caplog):
+    """Known Modbus errors should be logged with host, port, slave, and profile."""
+    caplog.set_level("WARNING")
+
+    with patch(
+        "custom_components.victron_evse.config_flow.VictronEvseModbusHub.detect_profile",
+        side_effect=VictronEvseModbusError("read timeout"),
+    ), patch(
+        "custom_components.victron_evse.config_flow.VictronEvseModbusHub.close",
+        return_value=None,
+    ):
+        with pytest.raises(Exception):
+            await validate_input(
+                hass,
+                {
+                    CONF_NAME: "Garage Charger",
+                    CONF_HOST: "192.168.5.48",
+                    CONF_PORT: 502,
+                    CONF_REGISTER_PROFILE: PROFILE_EVCS,
+                    CONF_SLAVE: 1,
+                },
+            )
+
+    assert (
+        "Modbus validation failed for 192.168.5.48:502 unit 1 profile evcs: read timeout"
+        in caplog.text
+    )
 
 
 @pytest.mark.asyncio

@@ -130,6 +130,14 @@ async def validate_input(
     try:
         profile, device_info = await hass.async_add_executor_job(hub.detect_profile)
     except VictronEvseModbusError as err:
+        _LOGGER.warning(
+            "Modbus validation failed for %s:%s unit %s profile %s: %s",
+            normalized[CONF_HOST],
+            normalized[CONF_PORT],
+            normalized[CONF_SLAVE],
+            normalized.get(CONF_REGISTER_PROFILE, DEFAULT_REGISTER_PROFILE),
+            err,
+        )
         raise CannotConnect from err
     finally:
         await hass.async_add_executor_job(hub.close)
