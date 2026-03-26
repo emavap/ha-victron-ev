@@ -14,6 +14,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 
 from .const import (
     CONF_CHARGER_MODEL,
+    CONF_DEVICE_UID,
     CONF_DEVICE_SERIAL,
     CONF_IDLE_SCAN_INTERVAL,
     CONF_REGISTER_PROFILE,
@@ -44,7 +45,10 @@ class VictronEvseCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.hub = VictronEvseModbusHub(
             host=entry.data[CONF_HOST],
             port=entry.data[CONF_PORT],
-            register_profile=entry.data.get(CONF_REGISTER_PROFILE, "auto"),
+            register_profile=entry.options.get(
+                CONF_REGISTER_PROFILE,
+                entry.data.get(CONF_REGISTER_PROFILE, "auto"),
+            ),
             slave=entry.data[CONF_SLAVE],
             timeout=entry.options.get(CONF_TIMEOUT, DEFAULT_TIMEOUT),
         )
@@ -71,6 +75,7 @@ class VictronEvseCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 (
                     DOMAIN,
                     self.config_entry.data.get(CONF_DEVICE_SERIAL)
+                    or self.config_entry.data.get(CONF_DEVICE_UID)
                     or current_data.get(CONF_DEVICE_SERIAL)
                     or self.config_entry.unique_id
                     or self.config_entry.entry_id,

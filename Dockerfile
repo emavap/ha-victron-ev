@@ -18,4 +18,4 @@ RUN apt-get update && \
 
 COPY . .
 
-CMD ["pytest", "-q", "tests"]
+CMD ["sh", "-lc", "python -m compileall custom_components tests && pytest -q tests"]

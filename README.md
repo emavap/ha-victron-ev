@@ -26,6 +26,12 @@ This repository contains a HACS-installable custom integration for Victron EV ch
 3. Restart Home Assistant.
 4. Add the integration from `Settings -> Devices & services`.
 
+## Prerequisites
+
+- The charger must be reachable over your network with a fixed IP address or stable hostname.
+- Modbus TCP must be enabled on the charger.
+- The Modbus port and slave ID in Home Assistant must match the charger configuration.
+
 ## Configuration
 
 The config flow asks for:
@@ -36,6 +42,17 @@ The config flow asks for:
 - Register profile (`Auto-detect`, `EVCS`, or `EVSE`)
 - Modbus slave ID
 
+To change the IP address or port later, open the integration in Home Assistant and use `Reconfigure`. The reconfigure flow lets you update the host, port, profile, and slave ID without removing and re-adding the device.
+
+## Migrating From YAML
+
+If you previously used the old package-style YAML setup:
+
+- remove the old Victron EV charger package includes from your Home Assistant configuration
+- remove the old template, automation, and Modbus entities to avoid duplicates
+- add this custom integration through the UI and complete the config flow
+- if needed, use `Reconfigure` later to change the charger IP address, port, or slave ID
+
 The options flow lets you tune:
 
 - Register profile override
@@ -45,4 +62,4 @@ The options flow lets you tune:
 
 ## Repository layout
 
-The repository only contains the HACS custom integration, packaging metadata, and tests. The old package-style YAML files and dashboard examples have been removed.
+The repository contains the HACS custom integration, packaging metadata, tests, and local/CI validation files. The old package-style YAML files and dashboard examples have been removed.

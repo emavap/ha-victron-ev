@@ -19,6 +19,7 @@ CONF_SLAVE = "slave"
 CONF_TIMEOUT = "timeout"
 CONF_CHARGER_MODEL = "charger_model"
 CONF_DEVICE_SERIAL = "device_serial"
+CONF_DEVICE_UID = "device_uid"
 
 DEFAULT_PORT = 502
 DEFAULT_SLAVE = 1

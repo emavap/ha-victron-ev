@@ -27,6 +27,12 @@ def test_decode_uint32():
     assert decode_uint32([0x0001, 0x0002]) == 65538
 
 
+def test_decode_uint32_rejects_wrong_register_length():
+    """The uint32 decoder should reject invalid register lengths."""
+    with pytest.raises(ValueError, match="Expected exactly 2 registers"):
+        decode_uint32([0x0001])
+
+
 def test_format_seconds_as_hms():
     """Session time formatting should be stable."""
     assert format_seconds_as_hms(3661) == "01:01:01"
@@ -75,6 +81,40 @@ def test_build_data_from_registers():
     assert data["auto_start"] is True
     assert data["vehicle_connected"] is True
     assert data["charging_active"] is True
+
+
+def test_build_data_from_registers_marks_optional_features_unavailable():
+    """Missing optional registers should stay unavailable instead of false."""
+    main_block = [
+        1,
+        0,
+        0,
+        0,
+        0,
+        7250,
+        2,
+        16,
+        32,
+        157,
+        0,
+        3600,
+        250,
+        0,
+        0,
+        1234,
+    ]
+
+    data = build_data_from_registers(
+        profile=EVSE_PROFILE,
+        main_block=main_block,
+        auto_start_register=None,
+        min_current_register=6,
+        detected_phases_register=None,
+        device_info={"display_enabled": None},
+    )
+
+    assert data["auto_start"] is None
+    assert data["display_enabled"] is None
 
 
 def test_build_data_from_evcs_registers():

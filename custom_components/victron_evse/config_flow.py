@@ -4,16 +4,19 @@ from __future__ import annotations
 
 import logging
 from typing import Any
+from uuid import uuid4
 
 import voluptuous as vol
 from homeassistant import config_entries
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_NAME, CONF_PORT
 from homeassistant.core import callback
-from homeassistant.data_entry_flow import FlowResult
+from homeassistant.data_entry_flow import AbortFlow, FlowResult
 from homeassistant.helpers import selector
 
 from .const import (
     CONF_CHARGER_MODEL,
+    CONF_DEVICE_UID,
     CONF_DEVICE_SERIAL,
     CONF_IDLE_SCAN_INTERVAL,
     CONF_REGISTER_PROFILE,
@@ -51,13 +54,53 @@ def _profile_selector(default: str):
     )
 
 
-async def validate_input(hass, data: dict[str, Any]) -> dict[str, str]:
+def _normalize_host(host: str) -> str:
+    """Normalize a host value for comparisons."""
+    return str(host).strip().lower()
+
+
+def _network_target_matches(entry: ConfigEntry, data: dict[str, Any]) -> bool:
+    """Return true when an entry points at the same network target."""
+    return (
+        _normalize_host(entry.data.get(CONF_HOST, "")) == _normalize_host(data[CONF_HOST])
+        and entry.data.get(CONF_PORT) == data[CONF_PORT]
+        and entry.data.get(CONF_SLAVE) == data[CONF_SLAVE]
+    )
+
+
+def _stable_unique_id(
+    serial: str | None,
+    existing_entry: ConfigEntry | None = None,
+) -> tuple[str, str | None]:
+    """Build the stable config-entry unique ID."""
+    if existing_entry is not None and existing_entry.unique_id:
+        existing_uid = existing_entry.data.get(CONF_DEVICE_UID)
+        if isinstance(existing_uid, str) and existing_uid:
+            return existing_entry.unique_id, existing_uid
+        return existing_entry.unique_id, existing_entry.unique_id.removeprefix("victron_")
+
+    if isinstance(serial, str) and serial:
+        return f"victron_{serial.lower()}", None
+
+    device_uid = uuid4().hex
+    return f"victron_{device_uid}", device_uid
+
+
+async def validate_input(
+    hass,
+    data: dict[str, Any],
+    existing_entry: ConfigEntry | None = None,
+) -> dict[str, str | None]:
     """Validate user input by opening a Modbus session."""
     hub = VictronEvseModbusHub(
         host=data[CONF_HOST],
         port=data[CONF_PORT],
         slave=data[CONF_SLAVE],
-        timeout=DEFAULT_TIMEOUT,
+        timeout=(
+            existing_entry.options.get(CONF_TIMEOUT, DEFAULT_TIMEOUT)
+            if existing_entry is not None
+            else DEFAULT_TIMEOUT
+        ),
         register_profile=data.get(CONF_REGISTER_PROFILE, DEFAULT_REGISTER_PROFILE),
     )
     try:
@@ -67,19 +110,15 @@ async def validate_input(hass, data: dict[str, Any]) -> dict[str, str]:
     finally:
         await hass.async_add_executor_job(hub.close)
 
-    host = str(data[CONF_HOST]).strip().lower()
     serial = device_info.get(CONF_DEVICE_SERIAL)
-    unique_id = (
-        f"victron_{serial.lower()}"
-        if isinstance(serial, str) and serial
-        else f"{host}:{data[CONF_PORT]}:{data[CONF_SLAVE]}"
-    )
+    unique_id, device_uid = _stable_unique_id(serial, existing_entry)
     return {
         "title": data.get(CONF_NAME) or f"{DEFAULT_NAME} ({data[CONF_HOST]})",
         "unique_id": unique_id,
         CONF_REGISTER_PROFILE: profile.key,
         CONF_CHARGER_MODEL: device_info.get(CONF_CHARGER_MODEL),
         CONF_DEVICE_SERIAL: serial,
+        CONF_DEVICE_UID: device_uid,
     }
 
 
@@ -87,6 +126,18 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Victron EV charger."""
 
     VERSION = 1
+
+    def _async_abort_if_network_target_configured(
+        self,
+        data: dict[str, Any],
+        exclude_entry_id: str | None = None,
+    ) -> None:
+        """Abort if another entry already uses the same network target."""
+        for entry in self._async_current_entries():
+            if exclude_entry_id is not None and entry.entry_id == exclude_entry_id:
+                continue
+            if _network_target_matches(entry, data):
+                raise AbortFlow("already_configured")
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -96,7 +147,10 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             try:
+                self._async_abort_if_network_target_configured(user_input)
                 info = await validate_input(self.hass, user_input)
+            except AbortFlow:
+                raise
             except CannotConnect:
                 errors["base"] = "cannot_connect"
             except Exception:
@@ -116,8 +170,10 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         CONF_SLAVE: user_input[CONF_SLAVE],
                         CONF_CHARGER_MODEL: info.get(CONF_CHARGER_MODEL),
                         CONF_DEVICE_SERIAL: info.get(CONF_DEVICE_SERIAL),
+                        CONF_DEVICE_UID: info.get(CONF_DEVICE_UID),
                     },
                     options={
+                        CONF_REGISTER_PROFILE: info[CONF_REGISTER_PROFILE],
                         CONF_SCAN_INTERVAL: DEFAULT_SCAN_INTERVAL,
                         CONF_IDLE_SCAN_INTERVAL: DEFAULT_IDLE_SCAN_INTERVAL,
                         CONF_TIMEOUT: DEFAULT_TIMEOUT,
@@ -157,7 +213,13 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             try:
-                info = await validate_input(self.hass, user_input)
+                self._async_abort_if_network_target_configured(
+                    user_input,
+                    exclude_entry_id=entry.entry_id,
+                )
+                info = await validate_input(self.hass, user_input, existing_entry=entry)
+            except AbortFlow:
+                raise
             except CannotConnect:
                 errors["base"] = "cannot_connect"
             except Exception:
@@ -180,6 +242,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         CONF_SLAVE: user_input[CONF_SLAVE],
                         CONF_CHARGER_MODEL: info.get(CONF_CHARGER_MODEL),
                         CONF_DEVICE_SERIAL: info.get(CONF_DEVICE_SERIAL),
+                        CONF_DEVICE_UID: info.get(CONF_DEVICE_UID),
                     },
                     reason="reconfigure_successful",
                 )
@@ -240,19 +303,10 @@ class VictronEvseOptionsFlow(config_entries.OptionsFlow):
     ) -> FlowResult:
         """Manage the integration options."""
         if user_input is not None:
-            if user_input[CONF_REGISTER_PROFILE] != self._config_entry.data.get(
-                CONF_REGISTER_PROFILE, DEFAULT_REGISTER_PROFILE
-            ):
-                self.hass.config_entries.async_update_entry(
-                    self._config_entry,
-                    data={
-                        **self._config_entry.data,
-                        CONF_REGISTER_PROFILE: user_input[CONF_REGISTER_PROFILE],
-                    },
-                )
             return self.async_create_entry(
                 title="",
                 data={
+                    CONF_REGISTER_PROFILE: user_input[CONF_REGISTER_PROFILE],
                     CONF_SCAN_INTERVAL: user_input[CONF_SCAN_INTERVAL],
                     CONF_IDLE_SCAN_INTERVAL: user_input[CONF_IDLE_SCAN_INTERVAL],
                     CONF_TIMEOUT: user_input[CONF_TIMEOUT],
@@ -265,12 +319,18 @@ class VictronEvseOptionsFlow(config_entries.OptionsFlow):
                 {
                     vol.Required(
                         CONF_REGISTER_PROFILE,
-                        default=self._config_entry.data.get(
-                            CONF_REGISTER_PROFILE, DEFAULT_REGISTER_PROFILE
+                        default=self._config_entry.options.get(
+                            CONF_REGISTER_PROFILE,
+                            self._config_entry.data.get(
+                                CONF_REGISTER_PROFILE, DEFAULT_REGISTER_PROFILE
+                            ),
                         ),
                     ): _profile_selector(
-                        self._config_entry.data.get(
-                            CONF_REGISTER_PROFILE, DEFAULT_REGISTER_PROFILE
+                        self._config_entry.options.get(
+                            CONF_REGISTER_PROFILE,
+                            self._config_entry.data.get(
+                                CONF_REGISTER_PROFILE, DEFAULT_REGISTER_PROFILE
+                            ),
                         )
                     ),
                     vol.Required(
