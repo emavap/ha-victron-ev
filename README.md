@@ -1,6 +1,6 @@
 # Victron EV Charger for Home Assistant
 
-This repository contains a HACS-installable custom integration for Victron EV chargers. It replaces the original package-style YAML setup with a native Home Assistant integration that supports UI setup through config flow.
+This repository contains a HACS-installable custom integration for Victron EV chargers with UI setup through Home Assistant config flow.
 
 ## Features
 
@@ -50,15 +50,6 @@ The options flow lets you tune:
 - Active polling interval
 - Idle polling interval
 - Modbus timeout
-
-## Migrating From YAML
-
-If you previously used the old package-style YAML setup:
-
-- remove the old Victron EV charger package includes from your Home Assistant configuration
-- remove the old template, automation, and Modbus entities to avoid duplicates
-- add this custom integration through the UI and complete the config flow
-- if needed, use `Reconfigure` later to change the charger IP address, port, or slave ID
 
 ## Repository layout
 
