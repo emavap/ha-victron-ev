@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import inspect
 import logging
 from threading import Lock
 
@@ -276,7 +277,11 @@ class VictronEvseModbusHub:
         with self._lock:
             client = self._ensure_client()
             try:
-                response = client.write_register(address=address, value=value, slave=self._slave)
+                response = client.write_register(
+                    address=address,
+                    value=value,
+                    **self._device_id_kwargs(client.write_register),
+                )
             except Exception as err:
                 self._handle_transport_error(err, f"write register {address}")
             if response.isError():
@@ -293,7 +298,7 @@ class VictronEvseModbusHub:
                 response = client.read_holding_registers(
                     address=address,
                     count=count,
-                    slave=self._slave,
+                    **self._device_id_kwargs(client.read_holding_registers),
                 )
             except Exception as err:
                 self._handle_transport_error(
@@ -406,6 +411,17 @@ class VictronEvseModbusHub:
             )
 
         return self._client
+
+    def _device_id_kwargs(self, method) -> dict[str, int]:
+        """Return the correct slave/device_id keyword for the active pymodbus client."""
+        try:
+            parameters = inspect.signature(method).parameters
+        except (TypeError, ValueError):
+            parameters = {}
+
+        if "device_id" in parameters:
+            return {"device_id": self._slave}
+        return {"slave": self._slave}
 
     def _handle_transport_error(self, err: Exception, operation: str) -> None:
         """Reset the client and raise a normalized exception."""

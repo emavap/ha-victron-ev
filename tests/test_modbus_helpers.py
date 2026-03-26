@@ -470,6 +470,38 @@ def test_handle_transport_error_preserves_modbus_exception_text():
         hub._handle_transport_error(ModbusException("failure"), "open TCP connection")
 
 
+def test_device_id_kwargs_prefers_device_id_when_supported():
+    """The hub should adapt to pymodbus versions that renamed slave to device_id."""
+    hub = VictronEvseModbusHub(
+        host="192.168.5.48",
+        port=502,
+        slave=7,
+        timeout=5,
+        register_profile=PROFILE_AUTO,
+    )
+
+    def fake_method(*, device_id=1):
+        return None
+
+    assert hub._device_id_kwargs(fake_method) == {"device_id": 7}
+
+
+def test_device_id_kwargs_falls_back_to_slave():
+    """The hub should keep using slave on pymodbus versions that expect it."""
+    hub = VictronEvseModbusHub(
+        host="192.168.5.48",
+        port=502,
+        slave=7,
+        timeout=5,
+        register_profile=PROFILE_AUTO,
+    )
+
+    def fake_method(*, slave=1):
+        return None
+
+    assert hub._device_id_kwargs(fake_method) == {"slave": 7}
+
+
 def test_detect_profile_auto_falls_back_to_evse(monkeypatch):
     """Auto-detect should fall back to the legacy profile on unknown product IDs."""
     hub = VictronEvseModbusHub(
