@@ -212,6 +212,14 @@ class VictronEvseModbusHub:
     def read_all(self) -> dict[str, int | float | bool | str | None]:
         """Read all supported charger registers."""
         profile, device_info = self.detect_profile()
+        if profile.supports_device_info:
+            device_info = self._merge_device_info(
+                self._read_device_info(
+                    profile,
+                    product_id=device_info.get(REGISTER_PRODUCT_ID),
+                )
+            )
+            self._device_info = device_info
         main_block = self._read_holding_registers(profile.main_start, profile.main_count)
         auto_start_register = self._read_optional_holding_register(5049)
         min_current_register = self._read_optional_holding_register(5062)
@@ -353,6 +361,20 @@ class VictronEvseModbusHub:
             ),
             CONF_DEVICE_SERIAL: serial,
         }
+
+    def _merge_device_info(
+        self,
+        fresh_info: dict[str, int | str | bool | None],
+    ) -> dict[str, int | str | bool | None]:
+        """Preserve previously discovered metadata when an optional refresh is partial."""
+        if self._device_info is None:
+            return fresh_info
+
+        merged = dict(self._device_info)
+        for key, value in fresh_info.items():
+            if value is not None or key not in merged:
+                merged[key] = value
+        return merged
 
     def _ensure_client(self) -> ModbusTcpClient:
         """Return a connected pymodbus client."""

@@ -1,95 +1,18 @@
-# Replace the `victron_ev_charger_` prefix if you used a custom device name.
+# Copy `custom_components/victron_evse/www/*.js` to `/config/www/community/victron-ev-charger/`
+# and add the `/local/community/victron-ev-charger/*.js` files as Lovelace resources first.
+# Replace `victron_ev_charger` if your entities use a different prefix.
 type: vertical-stack
 cards:
-  - type: heading
-    heading: Victron EV Charger
-    heading_style: title
-    icon: mdi:ev-station
-    badges:
-      - type: entity
-        entity: sensor.victron_ev_charger_charger_status
-        show_state: true
-        show_icon: false
-      - type: entity
-        entity: binary_sensor.victron_ev_charger_vehicle_connected
-        show_state: true
-        show_icon: true
-
-  - type: grid
-    columns: 2
-    square: false
+  - type: horizontal-stack
     cards:
-      - type: gauge
-        entity: sensor.victron_ev_charger_charging_power
-        name: Power
-        min: 0
-        max: 22
-        needle: true
-        severity:
-          green: 0
-          yellow: 7
-          red: 12
+      - type: custom:victron-ev-charger-status-card
+        entity_prefix: victron_ev_charger
+      - type: custom:victron-ev-charger-control-card
+        entity_prefix: victron_ev_charger
 
-      - type: tile
-        entity: switch.victron_ev_charger_charging
-        name: Charging
-        tap_action:
-          action: toggle
-
-      - type: tile
-        entity: select.victron_ev_charger_charge_mode
-        name: Charge mode
-        tap_action:
-          action: more-info
-
-      - type: tile
-        entity: number.victron_ev_charger_manual_charging_current
-        name: Manual current
-        features:
-          - type: numeric-input
-            style: slider
-        features_position: bottom
-
-      - type: tile
-        entity: switch.victron_ev_charger_auto_start
-        name: Auto start
-        tap_action:
-          action: toggle
-
-      - type: tile
-        entity: sensor.victron_ev_charger_total_energy
-        name: Total energy
-
-  - type: entities
-    title: Session
-    show_header_toggle: false
-    entities:
-      - entity: sensor.victron_ev_charger_session_energy
-        name: Session energy
-      - entity: sensor.victron_ev_charger_session_time
-        name: Session time (s)
-      - entity: sensor.victron_ev_charger_actual_charging_current
-        name: Actual current
-      - entity: sensor.victron_ev_charger_detected_phases
-        name: Detected phases
-      - entity: binary_sensor.victron_ev_charger_charging_active
-        name: Charging active
-      - entity: binary_sensor.victron_ev_charger_start_stop_available
-        name: Start/stop available
-
-  - type: entities
-    title: Diagnostics
-    show_header_toggle: false
-    entities:
-      - entity: sensor.victron_ev_charger_register_profile
-        name: Register profile
-      - entity: sensor.victron_ev_charger_product_id
-        name: Product ID
-      - entity: sensor.victron_ev_charger_serial_number
-        name: Serial number
-      - entity: sensor.victron_ev_charger_firmware_version
-        name: Firmware version
-      - entity: sensor.victron_ev_charger_charger_position
-        name: Charger position
-      - entity: binary_sensor.victron_ev_charger_display_enabled
-        name: Display enabled
+  - type: horizontal-stack
+    cards:
+      - type: custom:victron-ev-charger-energy-card
+        entity_prefix: victron_ev_charger
+      - type: custom:victron-ev-charger-info-card
+        entity_prefix: victron_ev_charger

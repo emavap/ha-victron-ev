@@ -9,6 +9,12 @@ from custom_components.victron_evse.const import (
     PROFILE_EVCS,
     PROFILE_EVSE,
     REGISTER_CHARGER_STATUS,
+    REGISTER_CHARGER_POSITION,
+    REGISTER_CUSTOM_NAME,
+    REGISTER_DISPLAY_ENABLED,
+    REGISTER_FIRMWARE_VERSION,
+    REGISTER_PRODUCT_ID,
+    REGISTER_SERIAL_NUMBER,
 )
 from custom_components.victron_evse.modbus import (
     EVCS_PROFILE,
@@ -115,6 +121,109 @@ def test_build_data_from_registers_marks_optional_features_unavailable():
 
     assert data["auto_start"] is None
     assert data["display_enabled"] is None
+
+
+def test_build_data_marks_charging_complete_as_not_actively_charging():
+    """Charging-complete status should not be treated as active charging."""
+    main_block = [
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        3,
+        16,
+        32,
+        0,
+        0,
+        3600,
+        250,
+        0,
+        0,
+        1234,
+    ]
+
+    data = build_data_from_registers(
+        profile=EVSE_PROFILE,
+        main_block=main_block,
+        auto_start_register=1,
+        min_current_register=6,
+        detected_phases_register=3,
+    )
+
+    assert data["charger_status_text"] == "Charging Complete"
+    assert data["charging_active"] is False
+
+
+def test_read_all_preserves_cached_device_info_on_partial_refresh(monkeypatch):
+    """Refreshing EVCS metadata should not drop previously known optional values."""
+    hub = VictronEvseModbusHub(
+        host="10.0.0.2",
+        port=502,
+        slave=1,
+        timeout=5,
+        register_profile=PROFILE_EVCS,
+    )
+    cached_info = {
+        REGISTER_PRODUCT_ID: 0xC023,
+        REGISTER_SERIAL_NUMBER: "HQ123456",
+        REGISTER_FIRMWARE_VERSION: "0.1.34.2",
+        REGISTER_CHARGER_POSITION: "Output",
+        REGISTER_CUSTOM_NAME: "Driveway",
+        REGISTER_DISPLAY_ENABLED: True,
+        CONF_CHARGER_MODEL: "EVCS 32A V2",
+        CONF_DEVICE_SERIAL: "HQ123456",
+    }
+    main_block = [
+        1,
+        0,
+        0,
+        0,
+        0,
+        7250,
+        2,
+        16,
+        32,
+        157,
+        0,
+        3600,
+        250,
+        0,
+        0,
+        1234,
+    ]
+
+    hub._active_profile = EVCS_PROFILE
+    hub._device_info = dict(cached_info)
+    monkeypatch.setattr(
+        hub,
+        "_read_device_info",
+        lambda profile, product_id=None: {
+            REGISTER_PRODUCT_ID: product_id,
+            REGISTER_SERIAL_NUMBER: None,
+            REGISTER_FIRMWARE_VERSION: None,
+            REGISTER_CHARGER_POSITION: None,
+            REGISTER_CUSTOM_NAME: None,
+            REGISTER_DISPLAY_ENABLED: None,
+            CONF_CHARGER_MODEL: "EVCS 32A V2",
+            CONF_DEVICE_SERIAL: None,
+        },
+    )
+    monkeypatch.setattr(hub, "_read_holding_registers", lambda address, count: main_block)
+    monkeypatch.setattr(
+        hub,
+        "_read_optional_holding_register",
+        lambda address: {5049: 1, 5062: 6, 5109: 3}.get(address),
+    )
+
+    data = hub.read_all()
+
+    assert data[REGISTER_SERIAL_NUMBER] == "HQ123456"
+    assert data[REGISTER_FIRMWARE_VERSION] == "0.1.34.2"
+    assert data[REGISTER_CUSTOM_NAME] == "Driveway"
+    assert data[REGISTER_DISPLAY_ENABLED] is True
+    assert hub._device_info[REGISTER_SERIAL_NUMBER] == "HQ123456"
 
 
 def test_build_data_from_evcs_registers():

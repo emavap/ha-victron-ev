@@ -24,6 +24,7 @@ from custom_components.victron_evse.const import (
     DEFAULT_TIMEOUT,
     DOMAIN,
     PROFILE_EVCS,
+    PROFILE_EVSE,
 )
 from custom_components.victron_evse.config_flow import ConfigFlow, validate_input
 from custom_components.victron_evse.modbus import EVCS_PROFILE
@@ -299,7 +300,7 @@ async def test_reconfigure_flow_updates_host_and_port(hass):
             return_value={
                 "title": "Garage Charger",
                 "unique_id": "victron_hq123456",
-                CONF_REGISTER_PROFILE: PROFILE_EVCS,
+                CONF_REGISTER_PROFILE: PROFILE_EVSE,
                 CONF_CHARGER_MODEL: "EVCS 32A V2",
                 CONF_DEVICE_SERIAL: "HQ123456",
                 CONF_DEVICE_UID: None,
@@ -329,12 +330,16 @@ async def test_reconfigure_flow_updates_host_and_port(hass):
             return_value={
                 "title": "Garage Charger",
                 "unique_id": "victron_hq123456",
-                CONF_REGISTER_PROFILE: PROFILE_EVCS,
+                CONF_REGISTER_PROFILE: PROFILE_EVSE,
                 CONF_CHARGER_MODEL: "EVCS 32A V2",
                 CONF_DEVICE_SERIAL: "HQ123456",
                 CONF_DEVICE_UID: None,
             }
         ),
+    ), patch.object(
+        hass.config_entries,
+        "async_reload",
+        AsyncMock(return_value=True),
     ), patch.object(
         ConfigFlow,
         "_get_entry_from_context",
@@ -351,7 +356,7 @@ async def test_reconfigure_flow_updates_host_and_port(hass):
                 CONF_NAME: "Garage Charger",
                 CONF_HOST: "10.0.0.50",
                 CONF_PORT: 1502,
-                CONF_REGISTER_PROFILE: PROFILE_EVCS,
+                CONF_REGISTER_PROFILE: PROFILE_EVSE,
                 CONF_SLAVE: 1,
             },
         )
@@ -361,6 +366,7 @@ async def test_reconfigure_flow_updates_host_and_port(hass):
     assert entry.data[CONF_HOST] == "10.0.0.50"
     assert entry.data[CONF_PORT] == 1502
     assert entry.data[CONF_SLAVE] == 1
+    assert entry.options[CONF_REGISTER_PROFILE] == PROFILE_EVSE
 
 
 @pytest.mark.asyncio

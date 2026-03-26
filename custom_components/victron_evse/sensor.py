@@ -81,6 +81,15 @@ class VictronNumericSensor(VictronEvseEntity, SensorEntity):
         """Return the sensor state."""
         return self.coordinator.data.get(self.entity_description.value_key)
 
+    @property
+    def available(self) -> bool:
+        """Return true when the sensor data is available."""
+        return (
+            super().available
+            and self.entity_description.value_key in self.coordinator.data
+            and self.coordinator.data.get(self.entity_description.value_key) is not None
+        )
+
 
 class VictronTextSensor(VictronEvseEntity, SensorEntity):
     """Representation of a text EVSE sensor."""
@@ -101,3 +110,12 @@ class VictronTextSensor(VictronEvseEntity, SensorEntity):
         """Return the text sensor state."""
         value = self.coordinator.data.get(self.entity_description.value_key)
         return None if value is None else str(value)
+
+    @property
+    def available(self) -> bool:
+        """Return true when the sensor data is available."""
+        return (
+            super().available
+            and self.entity_description.value_key in self.coordinator.data
+            and self.coordinator.data.get(self.entity_description.value_key) is not None
+        )

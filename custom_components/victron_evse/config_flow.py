@@ -54,6 +54,18 @@ def _profile_selector(default: str):
     )
 
 
+def _number_box_selector(minimum: int, maximum: int):
+    """Build a number selector shown as a numeric input box."""
+    return selector.NumberSelector(
+        selector.NumberSelectorConfig(
+            min=minimum,
+            max=maximum,
+            step=1,
+            mode=selector.NumberSelectorMode.BOX,
+        )
+    )
+
+
 def _normalize_host(host: str) -> str:
     """Normalize a host value for comparisons."""
     return str(host).strip().lower()
@@ -193,8 +205,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         CONF_REGISTER_PROFILE,
                         default=DEFAULT_REGISTER_PROFILE,
                     ): _profile_selector(DEFAULT_REGISTER_PROFILE),
-                    vol.Required(CONF_SLAVE, default=DEFAULT_SLAVE): vol.All(
-                        vol.Coerce(int), vol.Range(min=1, max=247)
+                    vol.Required(CONF_SLAVE, default=DEFAULT_SLAVE): _number_box_selector(
+                        1, 247
                     ),
                 }
             ),
@@ -244,6 +256,10 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         CONF_DEVICE_SERIAL: info.get(CONF_DEVICE_SERIAL),
                         CONF_DEVICE_UID: info.get(CONF_DEVICE_UID),
                     },
+                    options={
+                        **entry.options,
+                        CONF_REGISTER_PROFILE: info[CONF_REGISTER_PROFILE],
+                    },
                     reason="reconfigure_successful",
                 )
 
@@ -262,14 +278,20 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     ): vol.All(vol.Coerce(int), vol.Range(min=1, max=65535)),
                     vol.Required(
                         CONF_REGISTER_PROFILE,
-                        default=entry.data.get(CONF_REGISTER_PROFILE, DEFAULT_REGISTER_PROFILE),
+                        default=entry.options.get(
+                            CONF_REGISTER_PROFILE,
+                            entry.data.get(CONF_REGISTER_PROFILE, DEFAULT_REGISTER_PROFILE),
+                        ),
                     ): _profile_selector(
-                        entry.data.get(CONF_REGISTER_PROFILE, DEFAULT_REGISTER_PROFILE)
+                        entry.options.get(
+                            CONF_REGISTER_PROFILE,
+                            entry.data.get(CONF_REGISTER_PROFILE, DEFAULT_REGISTER_PROFILE),
+                        )
                     ),
                     vol.Required(
                         CONF_SLAVE,
                         default=entry.data[CONF_SLAVE],
-                    ): vol.All(vol.Coerce(int), vol.Range(min=1, max=247)),
+                    ): _number_box_selector(1, 247),
                 }
             ),
             errors=errors,

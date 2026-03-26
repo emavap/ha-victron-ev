@@ -51,14 +51,16 @@ The options flow lets you tune:
 - Idle polling interval
 - Modbus timeout
 
+## Lovelace Cards
+
+Custom Lovelace cards for this integration are included in [custom_components/victron_evse/www/README.md](custom_components/victron_evse/www/README.md).
+
+An example dashboard layout using those cards is available in [cards/victron_ev_charger_dashboard.yaml](cards/victron_ev_charger_dashboard.yaml).
+
 ## Repository layout
 
-The repository contains the HACS custom integration, packaging metadata, tests, local/CI validation files, and example Lovelace dashboard YAML in [cards/README.md](cards/README.md).
+The repository contains the HACS custom integration, packaging metadata, tests, local/CI validation files, custom Lovelace cards, and example dashboard YAML.
 
 ## Validation
 
 The repository includes a Docker-based test environment and a GitHub Actions workflow that run the test suite for the custom integration.
-
-## Dashboard Example
-
-An example Lovelace dashboard for this integration is available in [cards/victron_ev_charger_dashboard.yaml](cards/victron_ev_charger_dashboard.yaml). If you used a custom device name during setup, replace the default `victron_ev_charger_` entity prefix in that file with your actual entity IDs.

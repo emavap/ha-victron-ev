@@ -1,0 +1,241 @@
+class VictronEvChargerInfoCard extends HTMLElement {
+  constructor() {
+    super();
+    this.attachShadow({ mode: "open" });
+  }
+
+  setConfig(config) {
+    this.config = config || {};
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+    this.render();
+  }
+
+  getCardSize() {
+    return 3;
+  }
+
+  _entityIds(domains) {
+    return Object.keys(this._hass.states).filter((entityId) =>
+      domains.some((domain) => entityId.startsWith(`${domain}.`))
+    );
+  }
+
+  _objectId(entityId) {
+    return entityId.split(".")[1] || "";
+  }
+
+  _extractPrefix(entityId, suffixes) {
+    const objectId = this._objectId(entityId);
+    for (const suffix of suffixes) {
+      if (objectId === suffix) {
+        return "";
+      }
+      if (objectId.endsWith(`_${suffix}`)) {
+        return objectId.slice(0, -(suffix.length + 1));
+      }
+    }
+    return null;
+  }
+
+  _resolvePrefix(domains, suffixes, configuredEntityIds = []) {
+    if (typeof this.config.entity_prefix === "string" && this.config.entity_prefix.trim()) {
+      return this.config.entity_prefix.trim();
+    }
+
+    for (const entityId of configuredEntityIds) {
+      if (!entityId) {
+        continue;
+      }
+      const prefix = this._extractPrefix(entityId, suffixes);
+      if (prefix !== null) {
+        return prefix;
+      }
+    }
+
+    const ids = this._entityIds(domains);
+    for (const suffix of suffixes) {
+      const found = ids.find((entityId) => this._objectId(entityId).endsWith(`_${suffix}`));
+      if (found) {
+        return this._extractPrefix(found, [suffix]);
+      }
+    }
+
+    return null;
+  }
+
+  _findEntity(domains, suffixes, configuredEntityId, prefix = null) {
+    if (configuredEntityId && this._hass.states[configuredEntityId]) {
+      return this._hass.states[configuredEntityId];
+    }
+
+    const ids = this._entityIds(domains);
+
+    if (prefix !== null) {
+      for (const domain of domains) {
+        for (const suffix of suffixes) {
+          const exactId = `${domain}.${prefix ? `${prefix}_` : ""}${suffix}`;
+          if (this._hass.states[exactId]) {
+            return this._hass.states[exactId];
+          }
+        }
+      }
+    }
+
+    for (const suffix of suffixes) {
+      const found = ids.find((entityId) => {
+        const objectId = this._objectId(entityId);
+        if (prefix !== null) {
+          return objectId.startsWith(`${prefix}_`) && objectId.endsWith(`_${suffix}`);
+        }
+        return entityId.endsWith(`_${suffix}`) || entityId.endsWith(`.${suffix}`);
+      });
+      if (found) {
+        return this._hass.states[found];
+      }
+    }
+
+    return null;
+  }
+
+  _row(label, entity) {
+    if (!entity || ["unknown", "unavailable"].includes(String(entity.state))) {
+      return "";
+    }
+    return `
+      <div class="row">
+        <div class="label">${label}</div>
+        <div class="value">${entity.state}</div>
+      </div>
+    `;
+  }
+
+  render() {
+    if (!this._hass) return;
+
+    const suffixes = [
+      "register_profile",
+      "product_id",
+      "serial_number",
+      "firmware_version",
+      "charger_position",
+      "display_enabled",
+    ];
+    const prefix = this._resolvePrefix(
+      ["sensor", "binary_sensor"],
+      suffixes,
+      [
+        this.config.register_profile_entity,
+        this.config.product_id_entity,
+        this.config.serial_number_entity,
+        this.config.firmware_version_entity,
+        this.config.charger_position_entity,
+        this.config.display_enabled_entity,
+      ]
+    );
+    const registerProfile = this._findEntity(
+      ["sensor"],
+      ["register_profile"],
+      this.config.register_profile_entity,
+      prefix
+    );
+    const productId = this._findEntity(
+      ["sensor"],
+      ["product_id"],
+      this.config.product_id_entity,
+      prefix
+    );
+    const serialNumber = this._findEntity(
+      ["sensor"],
+      ["serial_number"],
+      this.config.serial_number_entity,
+      prefix
+    );
+    const firmwareVersion = this._findEntity(
+      ["sensor"],
+      ["firmware_version"],
+      this.config.firmware_version_entity,
+      prefix
+    );
+    const chargerPosition = this._findEntity(
+      ["sensor"],
+      ["charger_position"],
+      this.config.charger_position_entity,
+      prefix
+    );
+    const displayEnabled = this._findEntity(
+      ["binary_sensor"],
+      ["display_enabled"],
+      this.config.display_enabled_entity,
+      prefix
+    );
+
+    const rows = [
+      this._row("Register profile", registerProfile),
+      this._row("Product ID", productId),
+      this._row("Serial number", serialNumber),
+      this._row("Firmware version", firmwareVersion),
+      this._row("Charger position", chargerPosition),
+      this._row("Display enabled", displayEnabled),
+    ].filter(Boolean);
+
+    if (!rows.length) {
+      this.shadowRoot.innerHTML = `
+        <ha-card><div class="empty">No diagnostic entities are currently available for this charger.</div></ha-card>
+      `;
+      return;
+    }
+
+    this.shadowRoot.innerHTML = `
+      <ha-card>
+        <div class="wrap">
+          <div class="header">Diagnostics</div>
+          ${rows.join("")}
+        </div>
+        <style>
+          .wrap { padding: 16px; }
+          .header {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 12px;
+          }
+          .row {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 10px 0;
+            border-top: 1px solid var(--divider-color);
+          }
+          .row:first-of-type {
+            border-top: 0;
+          }
+          .label {
+            color: var(--secondary-text-color);
+          }
+          .value {
+            font-weight: 600;
+            text-align: right;
+          }
+          .empty {
+            padding: 16px;
+            color: var(--secondary-text-color);
+          }
+        </style>
+      </ha-card>
+    `;
+  }
+}
+
+if (!customElements.get("victron-ev-charger-info-card")) {
+  customElements.define("victron-ev-charger-info-card", VictronEvChargerInfoCard);
+}
+window.customCards = window.customCards || [];
+if (!window.customCards.some((card) => card.type === "victron-ev-charger-info-card")) {
+  window.customCards.push({
+    type: "victron-ev-charger-info-card",
+    name: "Victron EV Charger Info Card",
+    description: "Diagnostic and device information for the Victron EV charger integration.",
+  });
+}
