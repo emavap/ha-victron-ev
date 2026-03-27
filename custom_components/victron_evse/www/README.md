@@ -11,14 +11,9 @@ This directory contains custom Lovelace cards for the `victron_evse` integration
 
 ## Installation
 
-Copy the `.js` files to your Home Assistant `www` directory, for example:
+When the integration is loaded, it automatically copies the card files into your Home Assistant `www/community/victron-ev-charger/` directory and attempts to register them as Lovelace module resources.
 
-```bash
-mkdir -p /config/www/community/victron-ev-charger/
-cp custom_components/victron_evse/www/*.js /config/www/community/victron-ev-charger/
-```
-
-Then add them as Lovelace resources:
+If your dashboard does not show the cards immediately, restart Home Assistant once and verify that these resources exist:
 
 ```yaml
 resources:
@@ -31,6 +26,8 @@ resources:
   - url: /local/community/victron-ev-charger/victron-ev-charger-info-card.js
     type: module
 ```
+
+Manual copying is only needed as a fallback if your Home Assistant frontend does not expose the Lovelace resource manager API.
 
 The cards can auto-detect the main integration entities in a single-charger setup. The safest setup is to define `entity_prefix` so every card binds to the same charger, especially if you have multiple chargers.
 
@@ -77,6 +74,7 @@ Replace `victron_ev_charger` with the actual object ID prefix from Home Assistan
 - `firmware_version_entity`
 - `charger_position_entity`
 - `display_enabled_entity`
+- `display_enabled_raw_entity`
 
 ## Example
 

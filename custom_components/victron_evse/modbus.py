@@ -32,6 +32,7 @@ from .const import (
     REGISTER_CUSTOM_NAME,
     REGISTER_DETECTED_PHASES,
     REGISTER_DISPLAY_ENABLED,
+    REGISTER_DISPLAY_ENABLED_RAW,
     REGISTER_FIRMWARE_VERSION,
     REGISTER_MANUAL_CURRENT,
     REGISTER_MAX_CURRENT,
@@ -121,6 +122,13 @@ def format_firmware_version(registers: list[int] | None) -> str | None:
     return ".".join(str((value >> shift) & 0xFF) for shift in (24, 16, 8, 0))
 
 
+def decode_display_enabled(register_value: int | None) -> bool | None:
+    """Decode the display-enabled flag when the charger returns a literal boolean."""
+    if register_value in (0, 1):
+        return bool(register_value)
+    return None
+
+
 def build_data_from_registers(
     profile: VictronRegisterProfile,
     main_block: list[int],
@@ -160,11 +168,8 @@ def build_data_from_registers(
         REGISTER_FIRMWARE_VERSION: info.get(REGISTER_FIRMWARE_VERSION),
         REGISTER_CUSTOM_NAME: info.get(REGISTER_CUSTOM_NAME),
         REGISTER_CHARGER_POSITION: info.get(REGISTER_CHARGER_POSITION),
-        REGISTER_DISPLAY_ENABLED: (
-            bool(info.get(REGISTER_DISPLAY_ENABLED))
-            if info.get(REGISTER_DISPLAY_ENABLED) is not None
-            else None
-        ),
+        REGISTER_DISPLAY_ENABLED: info.get(REGISTER_DISPLAY_ENABLED),
+        REGISTER_DISPLAY_ENABLED_RAW: info.get(REGISTER_DISPLAY_ENABLED_RAW),
         "charge_mode_option": CHARGE_MODE_MAP.get(charge_mode),
         "charger_status_text": profile.status_map.get(
             charger_status, f"Unknown ({charger_status})"
@@ -366,9 +371,8 @@ class VictronEvseModbusHub:
                 if custom_name_registers
                 else None
             ),
-            REGISTER_DISPLAY_ENABLED: (
-                bool(display_enabled) if display_enabled is not None else None
-            ),
+            REGISTER_DISPLAY_ENABLED: decode_display_enabled(display_enabled),
+            REGISTER_DISPLAY_ENABLED_RAW: display_enabled,
             CONF_CHARGER_MODEL: KNOWN_EVCS_PRODUCT_IDS.get(
                 product_id,
                 f"{profile.name} (0x{product_id:04X})"

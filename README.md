@@ -56,6 +56,8 @@ The options flow lets you tune:
 
 Custom Lovelace cards for this integration are included in [custom_components/victron_evse/www/README.md](custom_components/victron_evse/www/README.md).
 
+The integration now copies and registers those card resources automatically when a Victron EV Charger config entry is loaded.
+
 An example dashboard layout using those cards is available in [cards/victron_ev_charger_dashboard.yaml](cards/victron_ev_charger_dashboard.yaml).
 
 ## Repository layout

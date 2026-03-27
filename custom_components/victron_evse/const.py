@@ -122,6 +122,7 @@ REGISTER_FIRMWARE_VERSION = "firmware_version"
 REGISTER_CUSTOM_NAME = "custom_name"
 REGISTER_CHARGER_POSITION = "charger_position"
 REGISTER_DISPLAY_ENABLED = "display_enabled"
+REGISTER_DISPLAY_ENABLED_RAW = "display_enabled_raw"
 
 NUMERIC_SENSOR_DEFAULTS = {
     REGISTER_CHARGING_POWER: {
@@ -187,6 +188,11 @@ NUMERIC_SENSOR_DEFAULTS = {
     REGISTER_PRODUCT_ID: {
         "translation_key": "product_id",
         "icon": "mdi:identifier",
+        "entity_category": EntityCategory.DIAGNOSTIC,
+    },
+    REGISTER_DISPLAY_ENABLED_RAW: {
+        "translation_key": "display_enabled_raw",
+        "icon": "mdi:monitor-small",
         "entity_category": EntityCategory.DIAGNOSTIC,
     },
 }

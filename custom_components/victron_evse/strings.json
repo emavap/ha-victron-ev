@@ -95,6 +95,9 @@
       "product_id": {
         "name": "Product ID"
       },
+      "display_enabled_raw": {
+        "name": "Display enabled raw"
+      },
       "charger_status": {
         "name": "Charger status"
       },

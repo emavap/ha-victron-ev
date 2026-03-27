@@ -122,6 +122,7 @@ class VictronEvChargerInfoCard extends HTMLElement {
       "firmware_version",
       "charger_position",
       "display_enabled",
+      "display_enabled_raw",
     ];
     const prefix = this._resolvePrefix(
       ["sensor", "binary_sensor"],
@@ -133,6 +134,7 @@ class VictronEvChargerInfoCard extends HTMLElement {
         this.config.firmware_version_entity,
         this.config.charger_position_entity,
         this.config.display_enabled_entity,
+        this.config.display_enabled_raw_entity,
       ]
     );
     const registerProfile = this._findEntity(
@@ -171,6 +173,12 @@ class VictronEvChargerInfoCard extends HTMLElement {
       this.config.display_enabled_entity,
       prefix
     );
+    const displayEnabledRaw = this._findEntity(
+      ["sensor"],
+      ["display_enabled_raw"],
+      this.config.display_enabled_raw_entity,
+      prefix
+    );
 
     const rows = [
       this._row("Register profile", registerProfile),
@@ -179,6 +187,7 @@ class VictronEvChargerInfoCard extends HTMLElement {
       this._row("Firmware version", firmwareVersion),
       this._row("Charger position", chargerPosition),
       this._row("Display enabled", displayEnabled),
+      this._row("Display enabled raw", displayEnabledRaw),
     ].filter(Boolean);
 
     if (!rows.length) {

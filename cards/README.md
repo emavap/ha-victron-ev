@@ -2,7 +2,7 @@
 
 This directory contains Lovelace YAML examples for the `victron_evse` integration.
 
-These examples are built on top of the custom cards shipped in [custom_components/victron_evse/www/README.md](../custom_components/victron_evse/www/README.md).
+These examples are built on top of the custom cards shipped in [custom_components/victron_evse/www/README.md](../custom_components/victron_evse/www/README.md). The integration should register those cards automatically when at least one config entry is loaded.
 
 ## Files
 

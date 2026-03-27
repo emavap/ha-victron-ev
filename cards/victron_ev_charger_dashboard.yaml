@@ -1,5 +1,5 @@
-# Copy `custom_components/victron_evse/www/*.js` to `/config/www/community/victron-ev-charger/`
-# and add the `/local/community/victron-ev-charger/*.js` files as Lovelace resources first.
+# The integration should register these custom cards automatically.
+# If they do not appear, verify the `/local/community/victron-ev-charger/*.js` resources exist.
 # Replace `victron_ev_charger` if your entities use a different prefix.
 type: vertical-stack
 cards:

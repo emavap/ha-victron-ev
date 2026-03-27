@@ -24,6 +24,7 @@ from custom_components.victron_evse.modbus import (
     VictronEvseModbusError,
     VictronEvseModbusHub,
     build_data_from_registers,
+    decode_display_enabled,
     decode_uint32,
     format_seconds_as_hms,
 )
@@ -122,6 +123,14 @@ def test_build_data_from_registers_marks_optional_features_unavailable():
 
     assert data["auto_start"] is None
     assert data["display_enabled"] is None
+
+
+def test_decode_display_enabled_accepts_literal_boolean_values():
+    """Only literal Modbus booleans should be mapped to a binary sensor state."""
+    assert decode_display_enabled(0) is False
+    assert decode_display_enabled(1) is True
+    assert decode_display_enabled(65535) is None
+    assert decode_display_enabled(None) is None
 
 
 def test_known_product_id_maps_c026_to_evcs_ns():
@@ -341,6 +350,38 @@ def test_detect_profile_auto_selects_evcs_and_reads_device_info(monkeypatch):
     assert profile.key == PROFILE_EVCS
     assert device_info[CONF_CHARGER_MODEL] == KNOWN_EVCS_PRODUCT_IDS[0xC023]
     assert device_info[CONF_DEVICE_SERIAL] == "HQ123456"
+
+
+def test_detect_profile_keeps_raw_display_register_when_not_boolean(monkeypatch):
+    """Non-boolean display register values should stay diagnostic-only."""
+    hub = VictronEvseModbusHub(
+        host="10.0.0.2",
+        port=502,
+        slave=1,
+        timeout=5,
+        register_profile=PROFILE_AUTO,
+    )
+
+    def fake_read_holding_registers(address: int, count: int) -> list[int]:
+        responses: dict[tuple[int, int], list[int]] = {
+            (5000, 1): [0xC026],
+            (5001, 6): [0x5148, 0x3231, 0x3433, 0x3635, 0x0000, 0x0000],
+            (5007, 2): [0x0001, 0x2202],
+            (5027, 22): [0] * 22,
+        }
+        return responses[(address, count)]
+
+    monkeypatch.setattr(hub, "_read_holding_registers", fake_read_holding_registers)
+    monkeypatch.setattr(
+        hub,
+        "_read_optional_holding_register",
+        lambda address: {5026: 0, 5050: 65535}.get(address),
+    )
+
+    _, device_info = hub.detect_profile()
+
+    assert device_info["display_enabled"] is None
+    assert device_info["display_enabled_raw"] == 65535
 
 
 def test_detect_profile_reuses_cached_evcs_device_info(monkeypatch):
