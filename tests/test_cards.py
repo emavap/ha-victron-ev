@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 
 import pytest
@@ -10,6 +11,7 @@ from custom_components.victron_evse import (
     CARD_RESOURCE_BASE,
     CUSTOM_CARDS,
     _lovelace_resources,
+    _retry_register_lovelace_resources,
     register_custom_cards,
 )
 
@@ -55,11 +57,17 @@ class FakeHass:
     def __init__(self, base_path: Path, lovelace_data=None) -> None:
         self.config = FakeConfig(base_path)
         self.data = {}
+        self.tasks: list[asyncio.Task] = []
         if lovelace_data is not None:
             self.data["lovelace"] = lovelace_data
 
     async def async_add_executor_job(self, func, *args):
         return func(*args)
+
+    def async_create_task(self, coro):
+        task = asyncio.create_task(coro)
+        self.tasks.append(task)
+        return task
 
 
 @pytest.mark.asyncio
@@ -107,3 +115,79 @@ async def test_register_custom_cards_supports_object_lovelace_data(tmp_path, mon
 
     assert len(resources.created) == len(CUSTOM_CARDS)
     assert _lovelace_resources(hass) is resources
+
+
+@pytest.mark.asyncio
+async def test_register_custom_cards_retries_until_lovelace_is_ready(
+    tmp_path, monkeypatch
+):
+    """Card registration should retry if Lovelace resources are not ready yet."""
+    hass = FakeHass(tmp_path)
+    wait_for_retry = asyncio.Event()
+
+    monkeypatch.setattr(
+        "custom_components.victron_evse.add_extra_js_url",
+        lambda _hass, _url: None,
+    )
+
+    async def gated_sleep(_delay):
+        await wait_for_retry.wait()
+
+    monkeypatch.setattr("custom_components.victron_evse.asyncio.sleep", gated_sleep)
+
+    await register_custom_cards(hass)
+
+    assert "_cards_registered" not in hass.data["victron_evse"]
+    assert len(hass.tasks) == 1
+
+    resources = FakeResources()
+    hass.data["lovelace"] = {"resources": resources}
+    wait_for_retry.set()
+    await asyncio.gather(*hass.tasks)
+
+    expected_urls = [f"{CARD_RESOURCE_BASE}/{card_file}" for card_file in CUSTOM_CARDS]
+    assert [item["url"] for item in resources.created] == expected_urls
+    assert hass.data["victron_evse"]["_cards_registered"] is True
+
+
+@pytest.mark.asyncio
+async def test_retry_register_lovelace_resources_recovers_after_transient_error(
+    tmp_path, monkeypatch
+):
+    """Transient Lovelace API failures should not abort the retry loop."""
+    resources = FakeResources()
+    hass = FakeHass(tmp_path, lovelace_data={"resources": resources})
+    hass.data["victron_evse"] = {}
+    wait_for_retry = asyncio.Event()
+    attempts = 0
+
+    async def flaky_register(_hass, card_urls):
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise RuntimeError("resources not ready")
+        for card_url in card_urls:
+            await resources.async_create_item({"url": card_url, "type": "module"})
+        return True
+
+    async def gated_sleep(_delay):
+        await wait_for_retry.wait()
+
+    monkeypatch.setattr(
+        "custom_components.victron_evse._register_lovelace_resources",
+        flaky_register,
+    )
+    monkeypatch.setattr("custom_components.victron_evse.asyncio.sleep", gated_sleep)
+
+    retry_task = asyncio.create_task(
+        _retry_register_lovelace_resources(
+            hass,
+            [f"{CARD_RESOURCE_BASE}/{card_file}" for card_file in CUSTOM_CARDS],
+        )
+    )
+    hass.data["victron_evse"]["_resource_retry_task"] = retry_task
+    wait_for_retry.set()
+    await retry_task
+
+    assert attempts == 2
+    assert hass.data["victron_evse"]["_cards_registered"] is True
