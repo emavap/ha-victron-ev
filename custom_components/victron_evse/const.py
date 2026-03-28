@@ -168,7 +168,6 @@ NUMERIC_SENSOR_DEFAULTS = {
         "icon": "mdi:battery-charging",
         "native_unit_of_measurement": "kWh",
         "device_class": SensorDeviceClass.ENERGY,
-        "state_class": SensorStateClass.MEASUREMENT,
         "suggested_display_precision": 2,
     },
     REGISTER_TOTAL_ENERGY: {
