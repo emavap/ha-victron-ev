@@ -31,6 +31,9 @@ CUSTOM_CARDS = [
 CARD_RESOURCE_BASE = "/local/community/victron-ev-charger"
 RESOURCE_REGISTRATION_RETRY_ATTEMPTS = 12
 RESOURCE_REGISTRATION_RETRY_DELAY = 5
+RESOURCE_REGISTRATION_READY = "ready"
+RESOURCE_REGISTRATION_DEFERRED = "deferred"
+RESOURCE_REGISTRATION_UNSUPPORTED = "unsupported"
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
@@ -50,11 +53,16 @@ def _lovelace_resources(hass: HomeAssistant):
 
 async def _register_lovelace_resources(
     hass: HomeAssistant, card_urls: list[str]
-) -> bool:
+) -> str:
     """Register custom cards as Lovelace module resources when available."""
+    if hass.data.get(LOVELACE_DOMAIN) is None:
+        return RESOURCE_REGISTRATION_DEFERRED
+
     lovelace_resources = _lovelace_resources(hass)
-    if lovelace_resources is None or not hasattr(lovelace_resources, "async_create_item"):
-        return False
+    if lovelace_resources is None:
+        return RESOURCE_REGISTRATION_DEFERRED
+    if not hasattr(lovelace_resources, "async_create_item"):
+        return RESOURCE_REGISTRATION_UNSUPPORTED
 
     await lovelace_resources.async_get_info()
     existing_urls = {
@@ -70,7 +78,7 @@ async def _register_lovelace_resources(
             }
         )
         _LOGGER.info("Registered Lovelace resource: %s", card_url)
-    return True
+    return RESOURCE_REGISTRATION_READY
 
 
 async def _retry_register_lovelace_resources(
@@ -82,8 +90,11 @@ async def _retry_register_lovelace_resources(
     try:
         for attempt in range(RESOURCE_REGISTRATION_RETRY_ATTEMPTS):
             try:
-                if await _register_lovelace_resources(hass, card_urls):
+                status = await _register_lovelace_resources(hass, card_urls)
+                if status == RESOURCE_REGISTRATION_READY:
                     domain_data["_cards_registered"] = True
+                    return
+                if status == RESOURCE_REGISTRATION_UNSUPPORTED:
                     return
             except Exception as err:
                 _LOGGER.debug(
@@ -107,6 +118,11 @@ def _cancel_resource_retry_task(domain_data: dict) -> None:
     retry_task = domain_data.pop("_resource_retry_task", None)
     if retry_task is not None and not retry_task.done():
         retry_task.cancel()
+
+
+def _has_active_coordinators(domain_data: dict) -> bool:
+    """Return whether any config entry coordinator is still loaded."""
+    return any(not key.startswith("_") for key in domain_data)
 
 
 async def register_custom_cards(hass: HomeAssistant) -> None:
@@ -153,12 +169,26 @@ async def register_custom_cards(hass: HomeAssistant) -> None:
                 add_extra_js_url(hass, card_url)
             domain_data["_extra_js_urls_registered"] = True
 
-        if await _register_lovelace_resources(hass, card_urls):
+        registration_status = await _register_lovelace_resources(hass, card_urls)
+        if registration_status == RESOURCE_REGISTRATION_READY:
             domain_data["_cards_registered"] = True
-        elif card_urls and "_resource_retry_task" not in domain_data:
+        elif (
+            registration_status == RESOURCE_REGISTRATION_DEFERRED
+            and card_urls
+            and "_resource_retry_task" not in domain_data
+        ):
             domain_data["_resource_retry_task"] = hass.async_create_task(
                 _retry_register_lovelace_resources(hass, card_urls)
             )
+        elif (
+            registration_status == RESOURCE_REGISTRATION_UNSUPPORTED
+            and not domain_data.get("_resource_registration_unsupported_logged")
+        ):
+            _LOGGER.info(
+                "Lovelace resources are read-only; custom cards were copied to "
+                "www/community but must be added manually in YAML mode"
+            )
+            domain_data["_resource_registration_unsupported_logged"] = True
 
         for missing in missing_cards:
             _LOGGER.warning("Custom card file not found: %s", missing)
@@ -178,7 +208,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
         await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     except Exception:
-        hass.data.setdefault(DOMAIN, {}).pop(entry.entry_id, None)
+        domain_data = hass.data.setdefault(DOMAIN, {})
+        domain_data.pop(entry.entry_id, None)
+        if not _has_active_coordinators(domain_data):
+            _cancel_resource_retry_task(domain_data)
         await coordinator.async_close()
         raise
 
@@ -193,9 +226,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         domain_data = hass.data[DOMAIN]
         coordinator: VictronEvseCoordinator = domain_data.pop(entry.entry_id)
         await coordinator.async_close()
-        if not any(
-            isinstance(value, VictronEvseCoordinator) for value in domain_data.values()
-        ):
+        if not _has_active_coordinators(domain_data):
             _cancel_resource_retry_task(domain_data)
     return unload_ok
 

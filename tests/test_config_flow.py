@@ -1,5 +1,7 @@
 """Tests for the Victron EVSE config flow."""
 
+import asyncio
+
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
@@ -7,7 +9,10 @@ from homeassistant.const import CONF_HOST, CONF_NAME, CONF_PORT
 from homeassistant.data_entry_flow import AbortFlow, FlowResultType
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.victron_evse import async_setup_entry as integration_async_setup_entry
+from custom_components.victron_evse import (
+    async_setup_entry as integration_async_setup_entry,
+    async_unload_entry as integration_async_unload_entry,
+)
 from custom_components.victron_evse.const import (
     CONF_CHARGER_MODEL,
     CONF_DEVICE_UID,
@@ -660,3 +665,40 @@ async def test_async_setup_entry_cleans_up_on_initial_refresh_failure(hass):
     coordinator.async_setup.assert_awaited_once()
     coordinator.async_close.assert_awaited_once()
     assert entry.entry_id not in hass.data.get(DOMAIN, {})
+
+
+@pytest.mark.asyncio
+async def test_async_unload_entry_cancels_retry_task_when_last_entry_is_removed(hass):
+    """Background Lovelace retry tasks should be cancelled when the last entry unloads."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Garage Charger",
+        data={
+            CONF_NAME: "Garage Charger",
+            CONF_HOST: "10.0.0.2",
+            CONF_PORT: 502,
+            CONF_REGISTER_PROFILE: PROFILE_EVCS,
+            CONF_SLAVE: 1,
+        },
+        unique_id="victron_test",
+    )
+    entry.add_to_hass(hass)
+
+    coordinator = AsyncMock()
+    blocker = asyncio.Event()
+
+    async def wait_forever():
+        await blocker.wait()
+
+    retry_task = hass.async_create_task(wait_forever())
+    hass.data[DOMAIN] = {
+        entry.entry_id: coordinator,
+        "_resource_retry_task": retry_task,
+    }
+
+    with patch.object(hass.config_entries, "async_unload_platforms", return_value=True):
+        unload_ok = await integration_async_unload_entry(hass, entry)
+
+    assert unload_ok is True
+    await asyncio.sleep(0)
+    assert retry_task.cancelled()

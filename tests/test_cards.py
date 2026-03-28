@@ -10,6 +10,7 @@ import pytest
 from custom_components.victron_evse import (
     CARD_RESOURCE_BASE,
     CUSTOM_CARDS,
+    RESOURCE_REGISTRATION_READY,
     _lovelace_resources,
     _retry_register_lovelace_resources,
     register_custom_cards,
@@ -42,6 +43,19 @@ class FakeResources:
     async def async_create_item(self, item: dict[str, str]) -> None:
         self._items.append(item)
         self.created.append(item)
+
+
+class FakeReadOnlyResources:
+    """Minimal YAML-mode Lovelace resources store."""
+
+    def __init__(self, items: list[dict[str, str]] | None = None) -> None:
+        self._items = list(items or [])
+
+    async def async_get_info(self):
+        return {"resources": len(self._items)}
+
+    def async_items(self):
+        return list(self._items)
 
 
 class FakeLovelaceData:
@@ -151,6 +165,25 @@ async def test_register_custom_cards_retries_until_lovelace_is_ready(
 
 
 @pytest.mark.asyncio
+async def test_register_custom_cards_does_not_retry_for_read_only_lovelace_resources(
+    tmp_path, monkeypatch
+):
+    """Read-only Lovelace resource stores should not trigger futile retries."""
+    hass = FakeHass(tmp_path, lovelace_data={"resources": FakeReadOnlyResources()})
+
+    monkeypatch.setattr(
+        "custom_components.victron_evse.add_extra_js_url",
+        lambda _hass, _url: None,
+    )
+
+    await register_custom_cards(hass)
+
+    assert len(hass.tasks) == 0
+    assert "_resource_retry_task" not in hass.data["victron_evse"]
+    assert "_cards_registered" not in hass.data["victron_evse"]
+
+
+@pytest.mark.asyncio
 async def test_retry_register_lovelace_resources_recovers_after_transient_error(
     tmp_path, monkeypatch
 ):
@@ -168,7 +201,7 @@ async def test_retry_register_lovelace_resources_recovers_after_transient_error(
             raise RuntimeError("resources not ready")
         for card_url in card_urls:
             await resources.async_create_item({"url": card_url, "type": "module"})
-        return True
+        return RESOURCE_REGISTRATION_READY
 
     async def gated_sleep(_delay):
         await wait_for_retry.wait()
