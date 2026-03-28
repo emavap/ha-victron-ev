@@ -19,5 +19,6 @@ If you have multiple chargers or want precise control, configure explicit entity
 ## Notes
 
 - The example uses only entities created by this integration.
+- The dashboard keeps the status card full width so the charger illustration has room to breathe on desktop and still collapses cleanly on mobile.
 - EVCS-only diagnostics such as serial number, firmware version, and product ID appear only when the charger exposes them.
 - If `auto_start` or start/stop control is unsupported, the control card disables those buttons instead of showing active controls.

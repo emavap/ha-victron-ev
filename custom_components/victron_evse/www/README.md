@@ -46,10 +46,13 @@ Replace `victron_ev_charger` with the actual object ID prefix from Home Assistan
 
 ### Status Card
 
+- Hero-style overview with a built-in charger illustration and live state accents
 - `status_entity`
 - `power_entity`
 - `vehicle_connected_entity`
 - `charging_active_entity`
+- `name`: optional card title override
+- `max_power_kw`: optional scale for the load meter, defaults to `22`
 
 ### Control Card
 
@@ -83,8 +86,12 @@ type: vertical-stack
 cards:
   - type: custom:victron-ev-charger-status-card
     entity_prefix: victron_ev_charger
-  - type: custom:victron-ev-charger-control-card
-    entity_prefix: victron_ev_charger
+  - type: horizontal-stack
+    cards:
+      - type: custom:victron-ev-charger-control-card
+        entity_prefix: victron_ev_charger
+      - type: custom:victron-ev-charger-energy-card
+        entity_prefix: victron_ev_charger
   - type: custom:victron-ev-charger-info-card
     entity_prefix: victron_ev_charger
 ```

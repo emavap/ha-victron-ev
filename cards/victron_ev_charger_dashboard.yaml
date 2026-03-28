@@ -3,16 +3,15 @@
 # Replace `victron_ev_charger` if your entities use a different prefix.
 type: vertical-stack
 cards:
-  - type: horizontal-stack
-    cards:
-      - type: custom:victron-ev-charger-status-card
-        entity_prefix: victron_ev_charger
-      - type: custom:victron-ev-charger-control-card
-        entity_prefix: victron_ev_charger
+  - type: custom:victron-ev-charger-status-card
+    entity_prefix: victron_ev_charger
 
   - type: horizontal-stack
     cards:
+      - type: custom:victron-ev-charger-control-card
+        entity_prefix: victron_ev_charger
       - type: custom:victron-ev-charger-energy-card
         entity_prefix: victron_ev_charger
-      - type: custom:victron-ev-charger-info-card
-        entity_prefix: victron_ev_charger
+
+  - type: custom:victron-ev-charger-info-card
+    entity_prefix: victron_ev_charger
