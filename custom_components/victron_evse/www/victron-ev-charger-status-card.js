@@ -333,6 +333,7 @@ class VictronEvChargerStatusCard extends HTMLElement {
         <style>
           :host {
             display: block;
+            container-type: inline-size;
           }
           ha-card {
             overflow: hidden;
@@ -347,7 +348,7 @@ class VictronEvChargerStatusCard extends HTMLElement {
           }
           .hero {
             display: grid;
-            grid-template-columns: minmax(0, 1.25fr) minmax(240px, 0.9fr);
+            grid-template-columns: minmax(0, 1.15fr) minmax(200px, 0.85fr);
             gap: 22px;
             align-items: center;
           }
@@ -473,7 +474,7 @@ class VictronEvChargerStatusCard extends HTMLElement {
           }
           .visual {
             position: relative;
-            min-height: 280px;
+            min-height: 260px;
             min-width: 0;
             border-radius: 24px;
             background:
@@ -655,21 +656,31 @@ class VictronEvChargerStatusCard extends HTMLElement {
               transform: scale(0.96);
             }
           }
-          @media (max-width: 860px) {
+          @container (max-width: 980px) {
             .hero {
               grid-template-columns: 1fr;
             }
             .visual {
-              min-height: 240px;
               order: -1;
+              width: min(100%, 420px);
+              min-height: 220px;
+              margin: 0 auto;
             }
           }
-          @media (max-width: 640px) {
+          @container (max-width: 720px) {
             .shell {
               padding: 18px;
             }
             .title {
               font-size: 24px;
+            }
+            .metrics {
+              grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+          }
+          @container (max-width: 520px) {
+            .metrics {
+              grid-template-columns: 1fr;
             }
             .meter-header {
               flex-direction: column;
