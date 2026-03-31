@@ -7,6 +7,9 @@ class VictronEvChargerControlCard extends HTMLElement {
 
   setConfig(config) {
     this.config = config || {};
+    if (this._hass) {
+      this.render();
+    }
   }
 
   set hass(hass) {
@@ -28,8 +31,12 @@ class VictronEvChargerControlCard extends HTMLElement {
     return state && !["unknown", "unavailable", "none"].includes(state);
   }
 
+  _states() {
+    return this._hass?.states || {};
+  }
+
   _entityIds(domains) {
-    return Object.keys(this._hass.states).filter((entityId) =>
+    return Object.keys(this._states()).filter((entityId) =>
       domains.some((domain) => entityId.startsWith(`${domain}.`))
     );
   }
@@ -78,8 +85,10 @@ class VictronEvChargerControlCard extends HTMLElement {
   }
 
   _findEntity(domains, suffixes, configuredEntityId, prefix = null) {
-    if (configuredEntityId && this._hass.states[configuredEntityId]) {
-      return this._hass.states[configuredEntityId];
+    const states = this._states();
+
+    if (configuredEntityId && states[configuredEntityId]) {
+      return states[configuredEntityId];
     }
 
     const ids = this._entityIds(domains);
@@ -88,8 +97,8 @@ class VictronEvChargerControlCard extends HTMLElement {
       for (const domain of domains) {
         for (const suffix of suffixes) {
           const exactId = `${domain}.${prefix ? `${prefix}_` : ""}${suffix}`;
-          if (this._hass.states[exactId]) {
-            return this._hass.states[exactId];
+          if (states[exactId]) {
+            return states[exactId];
           }
         }
       }
@@ -104,7 +113,7 @@ class VictronEvChargerControlCard extends HTMLElement {
         return entityId.endsWith(`_${suffix}`) || entityId.endsWith(`.${suffix}`);
       });
       if (found) {
-        return this._hass.states[found];
+        return states[found];
       }
     }
 
@@ -133,6 +142,12 @@ class VictronEvChargerControlCard extends HTMLElement {
 
   render() {
     if (!this._hass) return;
+    if (!this._hass.states) {
+      this.shadowRoot.innerHTML = `
+        <ha-card><div class="empty">Waiting for Home Assistant state data...</div></ha-card>
+      `;
+      return;
+    }
 
     const suffixes = [
       "charging",
@@ -269,6 +284,8 @@ class VictronEvChargerControlCard extends HTMLElement {
             cursor: pointer;
             background: var(--secondary-background-color);
             color: var(--primary-text-color);
+            white-space: normal;
+            text-align: center;
           }
           button:disabled {
             cursor: not-allowed;
@@ -285,6 +302,8 @@ class VictronEvChargerControlCard extends HTMLElement {
             display: flex;
             justify-content: space-between;
             align-items: baseline;
+            gap: 8px;
+            flex-wrap: wrap;
             margin-bottom: 8px;
           }
           .current-value {
@@ -298,6 +317,7 @@ class VictronEvChargerControlCard extends HTMLElement {
           .note {
             color: var(--secondary-text-color);
             font-size: 14px;
+            overflow-wrap: anywhere;
           }
           input[type="range"] {
             width: 100%;
@@ -308,6 +328,12 @@ class VictronEvChargerControlCard extends HTMLElement {
           }
           code {
             font-family: monospace;
+          }
+          @media (max-width: 480px) {
+            .current-row {
+              flex-direction: column;
+              align-items: flex-start;
+            }
           }
         </style>
       </ha-card>
@@ -347,7 +373,7 @@ class VictronEvChargerControlCard extends HTMLElement {
 if (!customElements.get("victron-ev-charger-control-card")) {
   customElements.define("victron-ev-charger-control-card", VictronEvChargerControlCard);
 }
-window.customCards = window.customCards || [];
+window.customCards = Array.isArray(window.customCards) ? window.customCards : [];
 if (!window.customCards.some((card) => card.type === "victron-ev-charger-control-card")) {
   window.customCards.push({
     type: "victron-ev-charger-control-card",

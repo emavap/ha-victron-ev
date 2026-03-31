@@ -6,6 +6,9 @@ class VictronEvChargerStatusCard extends HTMLElement {
 
   setConfig(config) {
     this.config = config || {};
+    if (this._hass) {
+      this.render();
+    }
   }
 
   set hass(hass) {
@@ -48,8 +51,12 @@ class VictronEvChargerStatusCard extends HTMLElement {
     return state && !["unknown", "unavailable", "none"].includes(state);
   }
 
+  _states() {
+    return this._hass?.states || {};
+  }
+
   _entityIds(domains) {
-    return Object.keys(this._hass.states).filter((entityId) =>
+    return Object.keys(this._states()).filter((entityId) =>
       domains.some((domain) => entityId.startsWith(`${domain}.`))
     );
   }
@@ -98,8 +105,10 @@ class VictronEvChargerStatusCard extends HTMLElement {
   }
 
   _findEntity(domains, suffixes, configuredEntityId, prefix = null) {
-    if (configuredEntityId && this._hass.states[configuredEntityId]) {
-      return this._hass.states[configuredEntityId];
+    const states = this._states();
+
+    if (configuredEntityId && states[configuredEntityId]) {
+      return states[configuredEntityId];
     }
 
     const ids = this._entityIds(domains);
@@ -108,8 +117,8 @@ class VictronEvChargerStatusCard extends HTMLElement {
       for (const domain of domains) {
         for (const suffix of suffixes) {
           const exactId = `${domain}.${prefix ? `${prefix}_` : ""}${suffix}`;
-          if (this._hass.states[exactId]) {
-            return this._hass.states[exactId];
+          if (states[exactId]) {
+            return states[exactId];
           }
         }
       }
@@ -124,7 +133,7 @@ class VictronEvChargerStatusCard extends HTMLElement {
         return entityId.endsWith(`_${suffix}`) || entityId.endsWith(`.${suffix}`);
       });
       if (found) {
-        return this._hass.states[found];
+        return states[found];
       }
     }
 
@@ -163,6 +172,12 @@ class VictronEvChargerStatusCard extends HTMLElement {
 
   render() {
     if (!this._hass) return;
+    if (!this._hass.states) {
+      this.shadowRoot.innerHTML = `
+        <ha-card><div class="empty">Waiting for Home Assistant state data...</div></ha-card>
+      `;
+      return;
+    }
 
     const suffixes = [
       "charger_status",
@@ -336,6 +351,9 @@ class VictronEvChargerStatusCard extends HTMLElement {
             gap: 22px;
             align-items: center;
           }
+          .copy {
+            min-width: 0;
+          }
           .eyebrow {
             font-size: 12px;
             letter-spacing: 0.16em;
@@ -353,6 +371,7 @@ class VictronEvChargerStatusCard extends HTMLElement {
             font-size: 28px;
             line-height: 1.05;
             font-weight: 700;
+            overflow-wrap: anywhere;
           }
           .badge {
             display: inline-flex;
@@ -376,9 +395,10 @@ class VictronEvChargerStatusCard extends HTMLElement {
           }
           .headline {
             margin-top: 14px;
-            font-size: 34px;
+            font-size: clamp(28px, 4vw, 34px);
             line-height: 1.05;
             font-weight: 700;
+            overflow-wrap: anywhere;
           }
           .subline {
             margin-top: 8px;
@@ -386,10 +406,11 @@ class VictronEvChargerStatusCard extends HTMLElement {
             color: rgba(226, 232, 240, 0.82);
             font-size: 15px;
             line-height: 1.5;
+            overflow-wrap: anywhere;
           }
           .metrics {
             display: grid;
-            grid-template-columns: repeat(3, minmax(0, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
             gap: 12px;
             margin-top: 18px;
           }
@@ -408,13 +429,15 @@ class VictronEvChargerStatusCard extends HTMLElement {
           }
           .metric-value {
             margin-top: 8px;
-            font-size: 21px;
+            font-size: clamp(18px, 3vw, 21px);
             font-weight: 700;
+            overflow-wrap: anywhere;
           }
           .metric-hint {
             margin-top: 6px;
             font-size: 12px;
             color: rgba(226, 232, 240, 0.7);
+            overflow-wrap: anywhere;
           }
           .meter {
             margin-top: 18px;
@@ -426,6 +449,7 @@ class VictronEvChargerStatusCard extends HTMLElement {
           .meter-header {
             display: flex;
             justify-content: space-between;
+            flex-wrap: wrap;
             gap: 12px;
             margin-bottom: 10px;
             font-size: 13px;
@@ -450,6 +474,7 @@ class VictronEvChargerStatusCard extends HTMLElement {
           .visual {
             position: relative;
             min-height: 280px;
+            min-width: 0;
             border-radius: 24px;
             background:
               radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.08), transparent 38%),
@@ -646,11 +671,10 @@ class VictronEvChargerStatusCard extends HTMLElement {
             .title {
               font-size: 24px;
             }
-            .headline {
-              font-size: 28px;
-            }
-            .metrics {
-              grid-template-columns: 1fr;
+            .meter-header {
+              flex-direction: column;
+              align-items: flex-start;
+              gap: 6px;
             }
           }
         </style>
@@ -662,7 +686,7 @@ class VictronEvChargerStatusCard extends HTMLElement {
 if (!customElements.get("victron-ev-charger-status-card")) {
   customElements.define("victron-ev-charger-status-card", VictronEvChargerStatusCard);
 }
-window.customCards = window.customCards || [];
+window.customCards = Array.isArray(window.customCards) ? window.customCards : [];
 if (!window.customCards.some((card) => card.type === "victron-ev-charger-status-card")) {
   window.customCards.push({
     type: "victron-ev-charger-status-card",
