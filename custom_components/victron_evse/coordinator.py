@@ -70,15 +70,18 @@ class VictronEvseCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def device_info(self) -> dict[str, Any]:
         """Return static device info for all entities."""
         current_data = self.data if isinstance(self.data, dict) else {}
+        identifier = (
+            self.config_entry.data.get(CONF_DEVICE_UID)
+            or self.config_entry.data.get(CONF_DEVICE_SERIAL)
+            or current_data.get(CONF_DEVICE_SERIAL)
+            or self.config_entry.unique_id
+            or self.config_entry.entry_id
+        )
         return {
             "identifiers": {
                 (
                     DOMAIN,
-                    self.config_entry.data.get(CONF_DEVICE_SERIAL)
-                    or self.config_entry.data.get(CONF_DEVICE_UID)
-                    or current_data.get(CONF_DEVICE_SERIAL)
-                    or self.config_entry.unique_id
-                    or self.config_entry.entry_id,
+                    identifier,
                 )
             },
             "manufacturer": MANUFACTURER,

@@ -4,6 +4,10 @@ class VictronEvChargerEnergyCard extends HTMLElement {
     this.attachShadow({ mode: "open" });
   }
 
+  static get AMBIGUOUS_PREFIX() {
+    return "__ambiguous__";
+  }
+
   setConfig(config) {
     this.config = config || {};
     if (this._hass) {
@@ -47,10 +51,8 @@ class VictronEvChargerEnergyCard extends HTMLElement {
     return null;
   }
 
-  _resolvePrefix(domains, suffixes, configuredEntityIds = []) {
-    if (typeof this.config.entity_prefix === "string" && this.config.entity_prefix.trim()) {
-      return this.config.entity_prefix.trim();
-    }
+  _collectPrefixes(domains, suffixes, configuredEntityIds = []) {
+    const prefixes = new Set();
 
     for (const entityId of configuredEntityIds) {
       if (!entityId) {
@@ -58,26 +60,75 @@ class VictronEvChargerEnergyCard extends HTMLElement {
       }
       const prefix = this._extractPrefix(entityId, suffixes);
       if (prefix !== null) {
-        return prefix;
+        prefixes.add(prefix);
       }
+    }
+
+    if (prefixes.size) {
+      return prefixes;
     }
 
     const ids = this._entityIds(domains);
-    for (const suffix of suffixes) {
-      const found = ids.find((entityId) => this._objectId(entityId).endsWith(`_${suffix}`));
-      if (found) {
-        return this._extractPrefix(found, [suffix]);
+    for (const entityId of ids) {
+      const prefix = this._extractPrefix(entityId, suffixes);
+      if (prefix !== null) {
+        prefixes.add(prefix);
       }
     }
 
+    return prefixes;
+  }
+
+  _configuredEntityIds(configuredEntityIds = []) {
+    return configuredEntityIds.filter((entityId) => typeof entityId === "string" && entityId.trim());
+  }
+
+  _configuredPrefixes(suffixes, configuredEntityIds = []) {
+    const prefixes = new Set();
+    for (const entityId of this._configuredEntityIds(configuredEntityIds)) {
+      const prefix = this._extractPrefix(entityId, suffixes);
+      if (prefix !== null) {
+        prefixes.add(prefix);
+      }
+    }
+    return prefixes;
+  }
+
+  _resolvePrefix(domains, suffixes, configuredEntityIds = []) {
+    if (typeof this.config.entity_prefix === "string" && this.config.entity_prefix.trim()) {
+      return this.config.entity_prefix.trim();
+    }
+    const explicitIds = this._configuredEntityIds(configuredEntityIds);
+    if (explicitIds.length === configuredEntityIds.length) {
+      return null;
+    }
+    if (explicitIds.length) {
+      const prefixes = this._configuredPrefixes(suffixes, configuredEntityIds);
+      if (prefixes.size === 1) {
+        return [...prefixes][0];
+      }
+      return VictronEvChargerEnergyCard.AMBIGUOUS_PREFIX;
+    }
+
+    const prefixes = this._collectPrefixes(domains, suffixes, configuredEntityIds);
+    if (prefixes.size === 1) {
+      return [...prefixes][0];
+    }
+    if (prefixes.size > 1) {
+      return VictronEvChargerEnergyCard.AMBIGUOUS_PREFIX;
+    }
     return null;
   }
 
   _findEntity(domains, suffixes, configuredEntityId, prefix = null) {
     const states = this._states();
 
-    if (configuredEntityId && states[configuredEntityId]) {
-      return states[configuredEntityId];
+    if (configuredEntityId) {
+      return states[configuredEntityId] || null;
+    }
+
+    if (prefix === VictronEvChargerEnergyCard.AMBIGUOUS_PREFIX) {
+      return null;
     }
 
     const ids = this._entityIds(domains);
@@ -113,7 +164,20 @@ class VictronEvChargerEnergyCard extends HTMLElement {
     if (!entity || ["unknown", "unavailable"].includes(String(entity.state))) {
       return "Unavailable";
     }
-    return `${entity.state}${unit}`;
+    return `${this._escape(entity.state)}${this._escape(unit)}`;
+  }
+
+  _escape(value) {
+    return String(value ?? "").replace(/[&<>"']/g, (char) => {
+      const map = {
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;",
+      };
+      return map[char] || char;
+    });
   }
 
   render() {
@@ -133,17 +197,25 @@ class VictronEvChargerEnergyCard extends HTMLElement {
       "detected_car_phases",
       "detected_phases",
     ];
+    const configuredEntityIds = [
+      this.config.session_energy_entity,
+      this.config.total_energy_entity,
+      this.config.session_time_entity,
+      this.config.current_entity,
+      this.config.phases_entity,
+    ];
     const prefix = this._resolvePrefix(
       ["sensor"],
       suffixes,
-      [
-        this.config.session_energy_entity,
-        this.config.total_energy_entity,
-        this.config.session_time_entity,
-        this.config.current_entity,
-        this.config.phases_entity,
-      ]
+      configuredEntityIds
     );
+
+    if (prefix === VictronEvChargerEnergyCard.AMBIGUOUS_PREFIX) {
+      this.shadowRoot.innerHTML = `
+        <ha-card><div class="empty">Multiple Victron EV charger entity groups found. Set <code>entity_prefix</code> or explicit entity IDs.</div></ha-card>
+      `;
+      return;
+    }
     const sessionEnergy = this._findEntity(["sensor"], ["session_energy"], this.config.session_energy_entity, prefix);
     const totalEnergy = this._findEntity(["sensor"], ["total_energy"], this.config.total_energy_entity, prefix);
     const sessionTime = this._findEntity(["sensor"], ["session_time_hms"], this.config.session_time_entity, prefix);

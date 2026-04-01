@@ -362,8 +362,6 @@ class VictronEvseModbusHub:
                 if position_register == 0
                 else "Input"
                 if position_register == 1
-                else "AC Input 2"
-                if position_register == 2
                 else None
             ),
             REGISTER_CUSTOM_NAME: (

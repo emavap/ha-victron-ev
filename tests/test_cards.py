@@ -84,6 +84,17 @@ class FakeHass:
         return task
 
 
+def _card_source(name: str) -> str:
+    """Read a custom card source file."""
+    return (
+        Path(__file__).resolve().parents[1]
+        / "custom_components"
+        / "victron_evse"
+        / "www"
+        / name
+    ).read_text(encoding="utf-8")
+
+
 @pytest.mark.asyncio
 async def test_register_custom_cards_copies_files_and_resources(tmp_path, monkeypatch):
     """The integration should copy cards and register Lovelace resources automatically."""
@@ -224,3 +235,60 @@ async def test_retry_register_lovelace_resources_recovers_after_transient_error(
 
     assert attempts == 2
     assert hass.data["victron_evse"]["_cards_registered"] is True
+
+
+def test_control_card_stops_on_ambiguous_entity_groups() -> None:
+    """The control card should not silently bind to one charger out of many."""
+    source = _card_source("victron-ev-charger-control-card.js")
+
+    assert "AMBIGUOUS_PREFIX" in source
+    assert "Multiple Victron EV charger entity groups found" in source
+    assert "Date.now() - pending.requestedAt > 10000" in source
+    assert "this._pendingCurrent = null;" in source
+    assert "if (explicitIds.length === configuredEntityIds.length)" in source
+    assert "const prefixes = this._configuredPrefixes(suffixes, configuredEntityIds);" in source
+    assert "return states[configuredEntityId] || null;" in source
+    assert 'data-mode="${this._escape(option)}"' in source
+    assert "${this._escape(option)}" in source
+
+
+def test_info_card_escapes_diagnostic_values() -> None:
+    """Diagnostic values should be HTML-escaped before rendering."""
+    source = _card_source("victron-ev-charger-info-card.js")
+
+    assert "${this._escape(entity.state)}" in source
+    assert "if (explicitIds.length === configuredEntityIds.length)" in source
+    assert "return states[configuredEntityId] || null;" in source
+
+
+def test_energy_card_escapes_entity_values() -> None:
+    """Energy card values should be HTML-escaped before rendering."""
+    source = _card_source("victron-ev-charger-energy-card.js")
+
+    assert "return `${this._escape(entity.state)}${this._escape(unit)}`;" in source
+    assert "if (explicitIds.length === configuredEntityIds.length)" in source
+    assert "return states[configuredEntityId] || null;" in source
+
+
+def test_status_card_stops_on_ambiguous_entity_groups() -> None:
+    """The status card should not silently mix entities from multiple chargers."""
+    source = _card_source("victron-ev-charger-status-card.js")
+
+    assert "AMBIGUOUS_PREFIX" in source
+    assert "Multiple Victron EV charger entity groups found" in source
+    assert "if (explicitIds.length === configuredEntityIds.length)" in source
+    assert "return states[configuredEntityId] || null;" in source
+
+
+def test_all_card_messages_require_explicit_configuration_when_ambiguous() -> None:
+    """All cards should fail closed when autodiscovery sees multiple chargers."""
+    for name in (
+        "victron-ev-charger-control-card.js",
+        "victron-ev-charger-status-card.js",
+        "victron-ev-charger-info-card.js",
+        "victron-ev-charger-energy-card.js",
+    ):
+        source = _card_source(name)
+        assert "Set <code>entity_prefix</code> or explicit entity IDs." in source or (
+            "Set <code>entity_prefix</code> or provide explicit entity IDs." in source
+        )

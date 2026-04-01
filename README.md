@@ -30,6 +30,8 @@ This repository contains a HACS-installable custom integration for Victron EV ch
 
 - The charger must be reachable over your network with a fixed IP address or stable hostname.
 - Modbus TCP must be enabled on the charger.
+- If the charger is paired with a GX device, Modbus TCP must also be enabled on the GX device and the EV charger must be activated in the GX Modbus TCP/UDP discovered-devices list.
+- If the charger's Modbus TCP IP whitelist is enabled, the Home Assistant host IP must be added to the whitelist or the connection will be refused.
 - The Modbus port and slave ID in Home Assistant must match the charger configuration.
 
 ## Configuration

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from typing import Any
-from uuid import uuid4
+from uuid import NAMESPACE_DNS, uuid5
 
 import voluptuous as vol
 from homeassistant import config_entries
@@ -97,6 +97,7 @@ def _network_target_matches(entry: ConfigEntry, data: dict[str, Any]) -> bool:
 
 def _stable_unique_id(
     serial: str | None,
+    data: dict[str, Any],
     existing_entry: ConfigEntry | None = None,
 ) -> tuple[str, str | None]:
     """Build the stable config-entry unique ID."""
@@ -109,7 +110,12 @@ def _stable_unique_id(
     if isinstance(serial, str) and serial:
         return f"victron_{serial.lower()}", None
 
-    device_uid = uuid4().hex
+    normalized = _normalized_modbus_input(data)
+    target = (
+        f"victron-evse:{_normalize_host(normalized[CONF_HOST])}:"
+        f"{normalized[CONF_PORT]}:{normalized[CONF_SLAVE]}"
+    )
+    device_uid = uuid5(NAMESPACE_DNS, target).hex
     return f"victron_{device_uid}", device_uid
 
 
@@ -150,7 +156,11 @@ async def validate_input(
         await hass.async_add_executor_job(hub.close)
 
     serial = device_info.get(CONF_DEVICE_SERIAL)
-    unique_id, device_uid = _stable_unique_id(serial, existing_entry)
+    unique_id, device_uid = _stable_unique_id(
+        serial,
+        normalized,
+        existing_entry,
+    )
     return {
         "title": normalized.get(CONF_NAME) or f"{DEFAULT_NAME} ({normalized[CONF_HOST]})",
         "unique_id": unique_id,

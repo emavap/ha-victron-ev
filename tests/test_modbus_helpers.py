@@ -452,7 +452,7 @@ def test_detect_profile_auto_treats_unknown_nonzero_product_as_evcs(monkeypatch)
 
     assert profile.key == PROFILE_EVCS
     assert device_info[CONF_CHARGER_MODEL] == "EVCS (0xC099)"
-    assert device_info["charger_position"] == "AC Input 2"
+    assert device_info["charger_position"] is None
 
 
 def test_handle_transport_error_includes_operation_and_exception_details():

@@ -3,6 +3,7 @@
 import asyncio
 
 from unittest.mock import AsyncMock, Mock, patch
+from uuid import NAMESPACE_DNS, uuid5
 
 import pytest
 from homeassistant.const import CONF_HOST, CONF_NAME, CONF_PORT
@@ -229,7 +230,7 @@ async def test_validate_input_logs_victron_modbus_errors(hass, caplog):
 
 @pytest.mark.asyncio
 async def test_validate_input_falls_back_to_host_identity_without_serial(hass):
-    """Validation should generate a stable synthetic identity without a serial."""
+    """Validation should derive a deterministic synthetic identity without a serial."""
     with patch(
         "custom_components.victron_evse.config_flow.VictronEvseModbusHub.detect_profile",
         return_value=(
@@ -254,8 +255,10 @@ async def test_validate_input_falls_back_to_host_identity_without_serial(hass):
             },
         )
 
-    assert result["unique_id"].startswith("victron_")
-    assert result[CONF_DEVICE_UID] == result["unique_id"].removeprefix("victron_")
+    expected_uid = uuid5(NAMESPACE_DNS, "victron-evse:10.0.0.2:502:1").hex
+
+    assert result["unique_id"] == f"victron_{expected_uid}"
+    assert result[CONF_DEVICE_UID] == expected_uid
 
 
 @pytest.mark.asyncio

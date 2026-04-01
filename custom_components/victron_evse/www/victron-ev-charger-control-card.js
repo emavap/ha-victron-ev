@@ -5,6 +5,10 @@ class VictronEvChargerControlCard extends HTMLElement {
     this._pendingCurrent = null;
   }
 
+  static get AMBIGUOUS_PREFIX() {
+    return "__ambiguous__";
+  }
+
   setConfig(config) {
     this.config = config || {};
     if (this._hass) {
@@ -58,10 +62,8 @@ class VictronEvChargerControlCard extends HTMLElement {
     return null;
   }
 
-  _resolvePrefix(domains, suffixes, configuredEntityIds = []) {
-    if (typeof this.config.entity_prefix === "string" && this.config.entity_prefix.trim()) {
-      return this.config.entity_prefix.trim();
-    }
+  _collectPrefixes(domains, suffixes, configuredEntityIds = []) {
+    const prefixes = new Set();
 
     for (const entityId of configuredEntityIds) {
       if (!entityId) {
@@ -69,26 +71,88 @@ class VictronEvChargerControlCard extends HTMLElement {
       }
       const prefix = this._extractPrefix(entityId, suffixes);
       if (prefix !== null) {
-        return prefix;
+        prefixes.add(prefix);
       }
+    }
+
+    if (prefixes.size) {
+      return prefixes;
     }
 
     const ids = this._entityIds(domains);
-    for (const suffix of suffixes) {
-      const found = ids.find((entityId) => this._objectId(entityId).endsWith(`_${suffix}`));
-      if (found) {
-        return this._extractPrefix(found, [suffix]);
+    for (const entityId of ids) {
+      const prefix = this._extractPrefix(entityId, suffixes);
+      if (prefix !== null) {
+        prefixes.add(prefix);
       }
     }
 
+    return prefixes;
+  }
+
+  _configuredEntityIds(configuredEntityIds = []) {
+    return configuredEntityIds.filter((entityId) => typeof entityId === "string" && entityId.trim());
+  }
+
+  _configuredPrefixes(suffixes, configuredEntityIds = []) {
+    const prefixes = new Set();
+    for (const entityId of this._configuredEntityIds(configuredEntityIds)) {
+      const prefix = this._extractPrefix(entityId, suffixes);
+      if (prefix !== null) {
+        prefixes.add(prefix);
+      }
+    }
+    return prefixes;
+  }
+
+  _escape(value) {
+    return String(value ?? "").replace(/[&<>"']/g, (char) => {
+      const map = {
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;",
+      };
+      return map[char] || char;
+    });
+  }
+
+  _resolvePrefix(domains, suffixes, configuredEntityIds = []) {
+    if (typeof this.config.entity_prefix === "string" && this.config.entity_prefix.trim()) {
+      return this.config.entity_prefix.trim();
+    }
+    const explicitIds = this._configuredEntityIds(configuredEntityIds);
+    if (explicitIds.length === configuredEntityIds.length) {
+      return null;
+    }
+    if (explicitIds.length) {
+      const prefixes = this._configuredPrefixes(suffixes, configuredEntityIds);
+      if (prefixes.size === 1) {
+        return [...prefixes][0];
+      }
+      return VictronEvChargerControlCard.AMBIGUOUS_PREFIX;
+    }
+
+    const prefixes = this._collectPrefixes(domains, suffixes, configuredEntityIds);
+    if (prefixes.size === 1) {
+      return [...prefixes][0];
+    }
+    if (prefixes.size > 1) {
+      return VictronEvChargerControlCard.AMBIGUOUS_PREFIX;
+    }
     return null;
   }
 
   _findEntity(domains, suffixes, configuredEntityId, prefix = null) {
     const states = this._states();
 
-    if (configuredEntityId && states[configuredEntityId]) {
-      return states[configuredEntityId];
+    if (configuredEntityId) {
+      return states[configuredEntityId] || null;
+    }
+
+    if (prefix === VictronEvChargerControlCard.AMBIGUOUS_PREFIX) {
+      return null;
     }
 
     const ids = this._entityIds(domains);
@@ -155,16 +219,24 @@ class VictronEvChargerControlCard extends HTMLElement {
       "manual_charging_current",
       "auto_start",
     ];
+    const configuredEntityIds = [
+      this.config.charging_entity,
+      this.config.mode_entity,
+      this.config.current_entity,
+      this.config.auto_start_entity,
+    ];
     const prefix = this._resolvePrefix(
       ["switch", "select", "number"],
       suffixes,
-      [
-        this.config.charging_entity,
-        this.config.mode_entity,
-        this.config.current_entity,
-        this.config.auto_start_entity,
-      ]
+      configuredEntityIds
     );
+
+    if (prefix === VictronEvChargerControlCard.AMBIGUOUS_PREFIX) {
+      this.shadowRoot.innerHTML = `
+        <ha-card><div class="empty">Multiple Victron EV charger entity groups found. Set <code>entity_prefix</code> or explicit entity IDs.</div></ha-card>
+      `;
+      return;
+    }
 
     const chargingEntity = this._findEntity(
       ["switch"],
@@ -210,7 +282,24 @@ class VictronEvChargerControlCard extends HTMLElement {
       return;
     }
 
-    const currentValue = this._pendingCurrent ?? parseFloat(currentEntity?.state || "0");
+    const actualCurrentValue = parseFloat(currentEntity?.state || "0");
+    if (this._pendingCurrent) {
+      const pending = this._pendingCurrent;
+      const hasActualValue = Number.isFinite(actualCurrentValue);
+      if (
+        currentEntity?.entity_id !== pending.entityId
+        || (hasActualValue && actualCurrentValue === pending.value)
+        || (
+          hasActualValue
+          && Number.isFinite(pending.baseValue)
+          && actualCurrentValue !== pending.baseValue
+        )
+        || Date.now() - pending.requestedAt > 10000
+      ) {
+        this._pendingCurrent = null;
+      }
+    }
+    const currentValue = this._pendingCurrent?.value ?? actualCurrentValue;
     const currentMin = parseFloat(currentEntity?.attributes?.min ?? 6);
     const currentMax = parseFloat(currentEntity?.attributes?.max ?? 32);
     const activeMode = modeAvailable ? modeEntity.state : null;
@@ -244,8 +333,8 @@ class VictronEvChargerControlCard extends HTMLElement {
               ${modeAvailable ? `
                 <div class="chips">
                   ${modeOptions.map((option) => `
-                    <button class="chip ${option === activeMode ? "selected" : ""}" data-mode="${option}">
-                      ${option}
+                    <button class="chip ${option === activeMode ? "selected" : ""}" data-mode="${this._escape(option)}">
+                      ${this._escape(option)}
                     </button>
                   `).join("")}
                 </div>
@@ -358,13 +447,26 @@ class VictronEvChargerControlCard extends HTMLElement {
     const slider = this.shadowRoot.getElementById("current-slider");
     if (slider && currentEntity && currentAvailable) {
       slider.addEventListener("input", (event) => {
-        this._pendingCurrent = parseFloat(event.target.value);
+        this._pendingCurrent = {
+          value: parseFloat(event.target.value),
+          entityId: currentEntity.entity_id,
+          baseValue: parseFloat(currentEntity.state || "0"),
+          requestedAt: Date.now(),
+        };
         this.render();
       });
       slider.addEventListener("change", (event) => {
         const value = parseFloat(event.target.value);
-        this._pendingCurrent = value;
-        this._setCurrent(currentEntity.entity_id, value);
+        this._pendingCurrent = {
+          value,
+          entityId: currentEntity.entity_id,
+          baseValue: parseFloat(currentEntity.state || "0"),
+          requestedAt: Date.now(),
+        };
+        this._setCurrent(currentEntity.entity_id, value).catch(() => {
+          this._pendingCurrent = null;
+          this.render();
+        });
       });
     }
   }
